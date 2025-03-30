@@ -76,21 +76,35 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
       const startDate = new Date(now.getFullYear(), now.getMonth(), 1);
       const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
       
-      const data = await calendarDataApi.getCalendarData(
-        startDate.toISOString(),
-        endDate.toISOString()
-      );
-      setCalendarData(data);
-      
-      // 检查是否已达到26天
-      if (data.current_cycle && data.current_cycle.valid_days_count >= 26 && !data.current_cycle.is_completed) {
-        setCycleCompletedDialogOpen(true);
+      try {
+        const data = await calendarDataApi.getCalendarData(
+          startDate.toISOString(),
+          endDate.toISOString()
+        );
+        setCalendarData(data);
+        
+        // 检查是否已达到26天
+        if (data.current_cycle && data.current_cycle.valid_days_count >= 26 && !data.current_cycle.is_completed) {
+          setCycleCompletedDialogOpen(true);
+        }
+        
+        setError(null);
+      } catch (err: any) {
+        console.error('获取日历数据失败:', err);
+        // 如果是404错误（未找到设置），不显示错误而是显示空日历
+        if (axios.isAxiosError(err) && err.response?.status === 404) {
+          // 创建符合CalendarResponse类型的空对象
+          setCalendarData({
+            days: [],
+            current_cycle: null,
+            valid_days_count: 0,
+            valid_hours_count: 0
+          });
+          setError(null);
+        } else {
+          setError('获取日历数据失败，请检查网络连接并重试');
+        }
       }
-      
-      setError(null);
-    } catch (err) {
-      console.error('获取日历数据失败:', err);
-      setError('获取日历数据失败，请检查网络连接并重试');
     } finally {
       setLoading(false);
     }
@@ -629,7 +643,7 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
           overflowX: 'auto'  // 允许水平滚动
         }}
       >
-        {currentCycle && (
+        {currentCycle ? (
           <Box mb={3}>
             <Typography variant="h6">
               当前周期: {currentCycle.cycle_number} 
@@ -644,6 +658,12 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
             <Typography variant="body2" color="textSecondary" mt={1}>
               点击日期可以设置该日的跳过时间段
             </Typography>
+          </Box>
+        ) : (
+          <Box mb={3}>
+            <Alert severity="info" sx={{ mb: 2 }}>
+              未设置开始时间，请先在【周期设置】中设置开始时间
+            </Alert>
           </Box>
         )}
         

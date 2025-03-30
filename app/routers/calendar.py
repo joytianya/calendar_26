@@ -115,11 +115,6 @@ def get_calendar_data(
     """
     # 获取日历设置
     settings = db.query(models.CalendarSettings).first()
-    if not settings:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="未找到日历设置，请先创建设置"
-        )
     
     # 如果未指定日期范围，默认返回当前月份
     if not start_date:
@@ -141,6 +136,15 @@ def get_calendar_data(
         if end_date.endswith('Z'):
             end_date = end_date[:-1]  # 移除Z后缀
         end_date = datetime.fromisoformat(end_date.replace('.000', ''))
+    
+    # 如果没有设置，返回空日历数据
+    if not settings:
+        return {
+            "days": [],
+            "current_cycle": None,
+            "valid_days_count": 0,
+            "valid_hours_count": 0
+        }
     
     # 获取当前周期
     current_cycle = db.query(models.CycleRecords)\
