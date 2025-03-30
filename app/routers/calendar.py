@@ -126,7 +126,10 @@ def get_calendar_data(
         now = datetime.now()
         start_date = datetime(now.year, now.month, 1)
     else:
-        start_date = datetime.fromisoformat(start_date)
+        # 处理带Z后缀的ISO格式时间字符串
+        if start_date.endswith('Z'):
+            start_date = start_date[:-1]  # 移除Z后缀
+        start_date = datetime.fromisoformat(start_date.replace('.000', ''))
         
     if not end_date:
         # 默认显示一个月
@@ -134,7 +137,10 @@ def get_calendar_data(
         next_year = start_date.year if start_date.month < 12 else start_date.year + 1
         end_date = datetime(next_year, next_month, 1) - timedelta(days=1)
     else:
-        end_date = datetime.fromisoformat(end_date)
+        # 处理带Z后缀的ISO格式时间字符串
+        if end_date.endswith('Z'):
+            end_date = end_date[:-1]  # 移除Z后缀
+        end_date = datetime.fromisoformat(end_date.replace('.000', ''))
     
     # 获取当前周期
     current_cycle = db.query(models.CycleRecords)\

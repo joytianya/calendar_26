@@ -223,12 +223,13 @@ const SettingsForm: React.FC<SettingsFormProps> = ({ onSettingsSaved }) => {
             </Box>
           )}
           
-          <Box display="flex" gap={2}>
+          <Box display="flex" gap={2} flexDirection={{ xs: 'column', sm: 'row' }}>
             <Button 
               variant="contained" 
               color="primary"
               onClick={() => setEditMode(true)}
-              sx={{ flex: 1 }}
+              sx={{ flex: 1, mb: { xs: 1, sm: 0 }, fontSize: { xs: '16px', sm: '14px' }, py: { xs: 1.5, sm: 1 } }}
+              onTouchStart={() => setEditMode(true)}
             >
               修改开始时间
             </Button>
@@ -237,7 +238,8 @@ const SettingsForm: React.FC<SettingsFormProps> = ({ onSettingsSaved }) => {
               variant="outlined" 
               color="error"
               onClick={handleResetDialogOpen}
-              sx={{ flex: 1 }}
+              sx={{ flex: 1, fontSize: { xs: '16px', sm: '14px' }, py: { xs: 1.5, sm: 1 } }}
+              onTouchStart={handleResetDialogOpen}
             >
               重置日历
             </Button>
@@ -358,16 +360,40 @@ const SettingsForm: React.FC<SettingsFormProps> = ({ onSettingsSaved }) => {
       <Dialog
         open={resetDialogOpen}
         onClose={handleResetDialogClose}
+        aria-labelledby="alert-dialog-title"
+        aria-describedby="alert-dialog-description"
+        sx={{ 
+          '& .MuiDialog-paper': { 
+            width: { xs: '90%', sm: '400px' },
+            p: { xs: 1, sm: 2 }
+          }
+        }}
       >
-        <DialogTitle>确定要重置日历？</DialogTitle>
+        <DialogTitle id="alert-dialog-title" sx={{ fontSize: { xs: '18px', sm: '20px' } }}>
+          确认重置日历？
+        </DialogTitle>
         <DialogContent>
-          <DialogContentText>
-            重置日历将删除所有现有的日历数据，包括当前周期和历史记录。此操作不可撤销。
+          <DialogContentText id="alert-dialog-description" sx={{ fontSize: { xs: '16px', sm: '14px' } }}>
+            此操作将删除所有日历设置、周期记录和跳过时间段。此操作不可恢复，确定要继续吗？
           </DialogContentText>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleResetDialogClose}>取消</Button>
-          <Button onClick={handleResetCalendar} color="error" variant="contained">
+        <DialogActions sx={{ px: 3, pb: 3 }}>
+          <Button 
+            onClick={handleResetDialogClose} 
+            color="primary"
+            sx={{ fontSize: { xs: '16px', sm: '14px' }, py: { xs: 1, sm: 0.5 } }}
+            onTouchStart={handleResetDialogClose}
+          >
+            取消
+          </Button>
+          <Button 
+            onClick={handleResetCalendar} 
+            color="error" 
+            variant="contained"
+            autoFocus
+            sx={{ fontSize: { xs: '16px', sm: '14px' }, py: { xs: 1, sm: 0.5 } }}
+            onTouchStart={handleResetCalendar}
+          >
             确认重置
           </Button>
         </DialogActions>

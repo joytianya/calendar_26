@@ -111,6 +111,7 @@ const CycleRow: React.FC<{ cycle: CycleRecord }> = ({ cycle }) => {
   const [open, setOpen] = useState(false);
   const [skipPeriods, setSkipPeriods] = useState<SkipPeriod[]>([]);
   const [loading, setLoading] = useState(false);
+  const isMobile = window.innerWidth < 960; // 检测是否为移动设备
   
   // 获取该周期的跳过时间段
   const fetchSkipPeriods = async () => {
@@ -250,253 +251,282 @@ const CycleRow: React.FC<{ cycle: CycleRecord }> = ({ cycle }) => {
     }, 0);
   };
   
-  return (
-    <React.Fragment>
-      <StyledTableRow>
-        <TableCell align="center">
-          {cycle.cycle_number}
-        </TableCell>
-        <TableCell align="center">{formatDatePart(cycle.start_date)}</TableCell>
-        <TableCell align="center">{formatTimePart(cycle.start_date)}</TableCell>
-        <TableCell align="center">{formatDatePart(cycle.end_date)}</TableCell>
-        <TableCell align="center">{calculateDuration(cycle)}</TableCell>
-        <TableCell align="center">
-          <Box display="flex" flexDirection="column">
-            <Typography variant="body2">{cycle.valid_days_count} 天</Typography>
-            <Typography variant="caption" color="text.secondary">
-              {typeof cycle.valid_hours_count === 'number' 
-                ? formatHours(cycle.valid_hours_count) 
-                : '0小时'}
-            </Typography>
-          </Box>
-        </TableCell>
-        <TableCell align="center">
-          {getCycleStatus(cycle)}
-        </TableCell>
-        <TableCell align="center">
-          <ActionButton
-            variant="contained"
-            color={open ? "secondary" : "primary"}
-            size="small"
-            startIcon={open ? <VisibilityOffIcon /> : <VisibilityIcon />}
-            onClick={toggleOpen}
-          >
-            {open ? '收起详情' : '查看详情'}
-          </ActionButton>
-        </TableCell>
-      </StyledTableRow>
-      
-      {/* 折叠区域 - 显示跳过时间段信息 */}
-      <TableRow>
-        <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={8}>
-          <Collapse in={open} timeout="auto" unmountOnExit>
-            <CollapseContainer sx={{ margin: 2 }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                <Typography variant="h6" component="div" sx={{ display: 'flex', alignItems: 'center' }}>
-                  <EventBusyIcon color="error" sx={{ mr: 1 }} />
-                  跳过时间段 
-                  <Chip 
-                    label={`共${skipPeriods.length}个`} 
-                    color="primary" 
-                    size="small" 
-                    sx={{ ml: 1, borderRadius: '16px' }}
-                  />
-                </Typography>
-                {skipPeriods.length > 0 && (
-                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    <AccessTimeIcon fontSize="small" sx={{ mr: 0.5, color: 'text.secondary' }} />
-                    <Typography variant="body2" color="text.secondary">
-                      总计跳过：{formatHours(calculateTotalSkippedHours(skipPeriods))}
-                    </Typography>
-                  </Box>
-                )}
+  // 移动端显示内容 - 跳过时间详情
+  if (isMobile) {
+    return (
+      <>
+        <Button
+          variant="outlined"
+          color="primary"
+          fullWidth
+          onClick={toggleOpen}
+          onTouchStart={toggleOpen}
+          startIcon={open ? <VisibilityOffIcon /> : <VisibilityIcon />}
+          sx={{ borderRadius: '20px', py: 1 }}
+        >
+          {open ? '隐藏跳过时间段' : '查看跳过时间段'}
+        </Button>
+        
+        <Collapse in={open} timeout="auto" unmountOnExit>
+          <Box sx={{ mt: 2, mb: 1, p: 1, backgroundColor: '#f5f5f5', borderRadius: '10px' }}>
+            {loading ? (
+              <Box display="flex" justifyContent="center" py={2}>
+                <CircularProgress size={24} />
               </Box>
-              
-              {loading ? (
-                <Box display="flex" justifyContent="center" p={2}>
-                  <CircularProgress size={24} />
+            ) : skipPeriods.length === 0 ? (
+              <Typography variant="body2" align="center" color="text.secondary" py={1}>
+                此周期无跳过时间段记录
+              </Typography>
+            ) : (
+              <Box>
+                <Typography variant="subtitle2" gutterBottom>
+                  <AccessTimeIcon sx={{ fontSize: 16, mr: 0.5, verticalAlign: 'middle' }} />
+                  跳过时间段记录 ({skipPeriods.length})
+                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 1 }}>
+                  {skipPeriods.map((period) => (
+                    <Box 
+                      key={period.id} 
+                      sx={{ 
+                        p: 1, 
+                        borderRadius: '8px', 
+                        border: '1px solid #e0e0e0',
+                        backgroundColor: 'white'
+                      }}
+                    >
+                      <Box display="flex" justifyContent="space-between">
+                        <Typography variant="body2" color="text.secondary">日期:</Typography>
+                        <Typography variant="body2">
+                          {formatDatePart(period.date)}
+                        </Typography>
+                      </Box>
+                      <Box display="flex" justifyContent="space-between">
+                        <Typography variant="body2" color="text.secondary">时间段:</Typography>
+                        <Typography variant="body2">
+                          {period.start_time.substring(0, 5)} - {period.end_time.substring(0, 5)}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  ))}
                 </Box>
-              ) : skipPeriods.length === 0 ? (
-                <Alert severity="info" sx={{ mb: 2 }}>
-                  本周期没有跳过的时间段
-                </Alert>
-              ) : (
-                <Box sx={{ 
-                  display: 'flex', 
-                  flexWrap: 'wrap', 
-                  gap: 2, 
-                  maxHeight: '350px', 
-                  overflowY: 'auto',
-                  mb: 2,
-                  pb: 1
-                }}>
-                  {skipPeriods.map((period) => {
-                    // 计算这个时间段跳过的小时数
-                    const [startHour, startMinute] = period.start_time.split(':').map(Number);
-                    const [endHour, endMinute] = period.end_time.split(':').map(Number);
-                    
-                    let hours = 0;
-                    if (endHour > startHour || (endHour === startHour && endMinute >= startMinute)) {
-                      // 同一天内
-                      hours = (endHour - startHour) + (endMinute - startMinute) / 60;
-                    } else {
-                      // 跨天
-                      hours = (24 - startHour) + endHour + (endMinute - startMinute) / 60;
-                    }
-                    
-                    return (
-                      <SkipPeriodCard key={period.id}>
-                        <CardContent sx={{ p: 2 }}>
-                          <Box display="flex" flexDirection="column" gap={1}>
-                            <Box display="flex" alignItems="center" mb={1}>
-                              <EventBusyIcon color="error" sx={{ mr: 1 }} />
-                              <Typography variant="h6" component="div">
-                                {formatDateOnly(period.date)}
-                              </Typography>
-                            </Box>
-                            <Divider sx={{ mb: 1 }} />
-                            <Box display="flex" alignItems="center" justifyContent="space-between">
-                              <TimeRangeChip>
-                                <AccessTimeIcon fontSize="small" sx={{ mr: 0.5 }} />
-                                {formatTimeOnly(period.start_time)} - {formatTimeOnly(period.end_time)}
-                              </TimeRangeChip>
-                              <Chip 
-                                label={`${hours.toFixed(1)}小时`} 
-                                size="small" 
-                                color="secondary"
-                                variant="outlined"
-                                sx={{ fontSize: '0.75rem' }}
-                              />
-                            </Box>
-                          </Box>
-                        </CardContent>
-                      </SkipPeriodCard>
-                    );
-                  })}
+              </Box>
+            )}
+          </Box>
+        </Collapse>
+      </>
+    );
+  }
+  
+  // 桌面端显示内容 - 表格行
+  return (
+    <StyledTableRow>
+      <TableCell>{cycle.cycle_number}</TableCell>
+      <TableCell>{formatDatePart(cycle.start_date)}</TableCell>
+      <TableCell>{formatTimePart(cycle.start_date)}</TableCell>
+      <TableCell>{cycle.end_date ? formatDatePart(cycle.end_date) : '进行中'}</TableCell>
+      <TableCell>{cycle.valid_days_count}/26 天</TableCell>
+      <TableCell>
+        {cycle.is_completed ? (
+          <Chip label="已完成" color="success" size="small" />
+        ) : (
+          <Chip label="进行中" color="primary" size="small" />
+        )}
+      </TableCell>
+      <TableCell>
+        <Button
+          variant="outlined"
+          size="small"
+          onClick={toggleOpen}
+          startIcon={open ? <VisibilityOffIcon /> : <VisibilityIcon />}
+        >
+          {open ? '隐藏详情' : '查看详情'}
+        </Button>
+        
+        <Collapse in={open} timeout="auto" unmountOnExit>
+          <Box sx={{ mt: 2, bgcolor: '#f5f5f5', p: 2, borderRadius: 1 }}>
+            {loading ? (
+              <Box display="flex" justifyContent="center" p={2}>
+                <CircularProgress size={24} />
+              </Box>
+            ) : skipPeriods.length === 0 ? (
+              <Typography variant="body2" color="text.secondary">
+                此周期无跳过时间段记录
+              </Typography>
+            ) : (
+              <Box>
+                <Typography variant="subtitle2" gutterBottom>
+                  <AccessTimeIcon fontSize="small" sx={{ mr: 1, verticalAlign: 'middle' }} />
+                  跳过时间段记录 ({skipPeriods.length})
+                </Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mt: 1 }}>
+                  {skipPeriods.map((period) => (
+                    <Box 
+                      key={period.id} 
+                      sx={{ 
+                        p: 1, 
+                        borderRadius: 1, 
+                        border: '1px solid #e0e0e0',
+                        bgcolor: 'background.paper'
+                      }}
+                    >
+                      <Typography variant="body2">
+                        日期: {formatDatePart(period.date)}
+                      </Typography>
+                      <Typography variant="body2">
+                        时间: {period.start_time.substring(0, 5)} - {period.end_time.substring(0, 5)}
+                      </Typography>
+                    </Box>
+                  ))}
                 </Box>
-              )}
-            </CollapseContainer>
-          </Collapse>
-        </TableCell>
-      </TableRow>
-    </React.Fragment>
+              </Box>
+            )}
+          </Box>
+        </Collapse>
+      </TableCell>
+    </StyledTableRow>
   );
 };
 
 const CycleHistory: React.FC = () => {
   const [cycles, setCycles] = useState<CycleRecord[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  // 刷新数据的间隔时间（毫秒）
-  const REFRESH_INTERVAL = 30000; // 30秒
-  
-  // 获取周期历史记录
+  // 获取所有周期记录
   const fetchCycles = useCallback(async () => {
     try {
       setLoading(true);
       const data = await cyclesApi.getAllCycles();
-      // 确保每个周期记录都有valid_hours_count字段
-      const processedData = data.map(cycle => ({
-        ...cycle,
-        valid_hours_count: cycle.valid_hours_count || 0
-      }));
-      setCycles(processedData);
-      setError(null);
+      setCycles(data);
     } catch (err) {
-      console.error('获取周期历史失败:', err);
-      setError('获取周期历史失败，请检查网络连接并重试');
+      console.error('获取周期历史记录失败:', err);
+      setError('加载周期历史记录失败，请刷新重试');
     } finally {
       setLoading(false);
     }
   }, []);
   
-  // 初始加载
   useEffect(() => {
     fetchCycles();
-    
-    // 设置定时器，定期刷新数据
-    const intervalId = setInterval(() => {
-      fetchCycles();
-    }, REFRESH_INTERVAL);
-    
-    // 清理函数，组件卸载时清除定时器
-    return () => clearInterval(intervalId);
   }, [fetchCycles]);
-
+  
   // 手动刷新数据
   const handleRefresh = () => {
     fetchCycles();
   };
   
-  if (loading && cycles.length === 0) {
-    return (
-      <Box display="flex" justifyContent="center" p={3}>
-        <CircularProgress />
-      </Box>
-    );
-  }
-  
-  if (error) {
-    return (
-      <Alert severity="error" sx={{ mb: 2 }}>
-        {error}
-      </Alert>
-    );
-  }
-  
   return (
-    <Paper elevation={3} sx={{ p: 3 }}>
+    <Paper elevation={3} sx={{ p: 3, mb: 3 }}>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-        <Typography variant="h6">
-          周期历史记录
-        </Typography>
+        <Typography variant="h6">周期历史记录</Typography>
         <Button 
           startIcon={<RefreshIcon />} 
-          size="small" 
           onClick={handleRefresh}
-          color="primary"
-          variant="outlined"
+          size="small"
+          sx={{ 
+            borderRadius: '20px',
+            fontSize: { xs: '14px', sm: '14px' }
+          }}
+          onTouchStart={handleRefresh}
         >
-          刷新数据
+          刷新
         </Button>
       </Box>
       
-      <Alert severity="info" sx={{ mb: 2 }}>
-        点击右侧"查看详情"按钮可以查看该周期的跳过时间记录
-      </Alert>
-      
-      {cycles.length === 0 ? (
-        <Alert severity="info">
-          暂无周期记录
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
         </Alert>
+      )}
+      
+      {loading ? (
+        <Box display="flex" justifyContent="center" alignItems="center" py={4}>
+          <CircularProgress />
+        </Box>
+      ) : cycles.length === 0 ? (
+        <Alert severity="info">暂无周期历史记录</Alert>
       ) : (
-        <TableContainer sx={{ borderRadius: 2, overflow: 'hidden' }}>
-          <Table aria-label="周期历史记录表" size="medium">
-            <TableHead>
-              <TableRow sx={{ backgroundColor: (theme) => theme.palette.primary.light }}>
-                <TableCell width="8%" align="center" sx={{ color: 'white', fontWeight: 'bold' }}>周期</TableCell>
-                <TableCell width="14%" align="center" sx={{ color: 'white', fontWeight: 'bold' }}>开始日期</TableCell>
-                <TableCell width="8%" align="center" sx={{ color: 'white', fontWeight: 'bold' }}>开始时间</TableCell>
-                <TableCell width="14%" align="center" sx={{ color: 'white', fontWeight: 'bold' }}>结束日期</TableCell>
-                <TableCell width="10%" align="center" sx={{ color: 'white', fontWeight: 'bold' }}>持续时间</TableCell>
-                <TableCell width="14%" align="center" sx={{ color: 'white', fontWeight: 'bold' }}>
-                  <Box display="flex" flexDirection="column">
-                    <Typography variant="body2" sx={{ color: 'white' }}>有效天数</Typography>
-                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.8)' }}>有效小时数</Typography>
+        <>
+          {/* 移动端视图 - 使用卡片布局替代表格 */}
+          <Box sx={{ display: { xs: 'flex', md: 'none' }, flexDirection: 'column', gap: 2 }}>
+            {cycles.map((cycle) => (
+              <Card key={cycle.id} sx={{ mb: 2, p: 1 }}>
+                <CardContent sx={{ p: 1 }}>
+                  <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                    <Typography variant="h6" component="div" sx={{ fontWeight: 'bold' }}>
+                      周期 #{cycle.cycle_number}
+                    </Typography>
+                    {cycle.is_completed ? (
+                      <Chip label="已完成" color="success" size="small" />
+                    ) : (
+                      <Chip label="进行中" color="primary" size="small" />
+                    )}
                   </Box>
-                </TableCell>
-                <TableCell width="12%" align="center" sx={{ color: 'white', fontWeight: 'bold' }}>状态</TableCell>
-                <TableCell width="20%" align="center" sx={{ color: 'white', fontWeight: 'bold' }}>操作</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {cycles.map((cycle) => (
-                <CycleRow key={cycle.id} cycle={cycle} />
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+                  
+                  <Divider sx={{ my: 1 }} />
+                  
+                  <Box sx={{ '& > div': { py: 0.5 } }}>
+                    <Box display="flex" justifyContent="space-between">
+                      <Typography variant="body2" color="text.secondary">开始日期:</Typography>
+                      <Typography variant="body2">
+                        {new Date(cycle.start_date).toLocaleDateString('zh-CN')}
+                      </Typography>
+                    </Box>
+                    
+                    <Box display="flex" justifyContent="space-between">
+                      <Typography variant="body2" color="text.secondary">开始时间:</Typography>
+                      <Typography variant="body2">
+                        {new Date(cycle.start_date).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                      </Typography>
+                    </Box>
+                    
+                    <Box display="flex" justifyContent="space-between">
+                      <Typography variant="body2" color="text.secondary">结束日期:</Typography>
+                      <Typography variant="body2">
+                        {cycle.end_date ? new Date(cycle.end_date).toLocaleDateString('zh-CN') : '进行中'}
+                      </Typography>
+                    </Box>
+                    
+                    <Box display="flex" justifyContent="space-between">
+                      <Typography variant="body2" color="text.secondary">有效天数:</Typography>
+                      <Typography variant="body2" fontWeight="bold">
+                        {cycle.valid_days_count}/26 天
+                      </Typography>
+                    </Box>
+                  </Box>
+                  
+                  <Divider sx={{ my: 1 }} />
+                  
+                  <Box mt={1}>
+                    <CycleRow cycle={cycle} />
+                  </Box>
+                </CardContent>
+              </Card>
+            ))}
+          </Box>
+          
+          {/* 桌面端视图 - 表格布局 */}
+          <TableContainer sx={{ display: { xs: 'none', md: 'block' }, overflowX: 'auto' }}>
+            <Table aria-label="周期历史记录表">
+              <TableHead>
+                <TableRow>
+                  <TableCell>周期号</TableCell>
+                  <TableCell>开始日期</TableCell>
+                  <TableCell>开始时间</TableCell>
+                  <TableCell>结束日期</TableCell>
+                  <TableCell>有效天数</TableCell>
+                  <TableCell>状态</TableCell>
+                  <TableCell>详情</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {cycles.map((cycle) => (
+                  <CycleRow key={cycle.id} cycle={cycle} />
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </>
       )}
     </Paper>
   );
