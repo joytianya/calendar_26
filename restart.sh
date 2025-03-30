@@ -42,14 +42,28 @@ fi
 # 短暂等待确保进程已停止
 sleep 2
 
+# 激活虚拟环境
+echo "激活虚拟环境..."
+cd "$(dirname "$0")"
+source venv/bin/activate
+
 # 启动后端服务
 echo "启动后端服务..."
-cd "$(dirname "$0")"
 python run.py &
 echo "后端服务已启动"
 
 # 等待后端服务启动
 sleep 3
+
+# 更新前端环境配置
+echo "更新前端API地址配置..."
+SERVER_IP=$(curl -s http://ifconfig.me || hostname -I | awk '{print $1}')
+echo "检测到服务器IP: $SERVER_IP"
+cat > "$(dirname "$0")/app/frontend/build/env-config.js" << EOF
+window._env_ = {
+  REACT_APP_API_URL: "http://${SERVER_IP}:8000"
+}; 
+EOF
 
 # 启动前端服务
 echo "启动前端服务..."
@@ -58,5 +72,5 @@ npx serve -s build &
 echo "前端服务已启动"
 
 echo "全部服务已重启完成"
-echo "前端访问地址: http://localhost:3000"
-echo "后端API地址: http://localhost:8000" 
+echo "前端访问地址: http://${SERVER_IP}:3000"
+echo "后端API地址: http://${SERVER_IP}:8000" 

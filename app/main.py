@@ -27,7 +27,10 @@ app = FastAPI(
 # 配置CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5000", "http://127.0.0.1:3000", "http://127.0.0.1:5000", "https://calendar-26-frontend.onrender.com"],  # 明确允许前端服务的来源
+    allow_origins=["http://localhost:3000", 
+    "http://localhost:5000", "http://127.0.0.1:3000", "http://127.0.0.1:5000", 
+    "https://calendar-26-frontend.onrender.com",
+    "http://101.126.143.26", "http://101.126.143.26:3000"],  # 明确允许前端服务的来源
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

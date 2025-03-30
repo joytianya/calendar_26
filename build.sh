@@ -7,6 +7,13 @@ set -e
 # 创建日志目录
 mkdir -p logs
 
+# 创建并激活虚拟环境
+echo "创建虚拟环境..."
+if [ ! -d "venv" ]; then
+  python3 -m venv venv
+fi
+source venv/bin/activate
+
 # 安装Python依赖
 echo "安装Python依赖..."
 pip install -r requirements.txt

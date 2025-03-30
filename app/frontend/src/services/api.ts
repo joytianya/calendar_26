@@ -9,15 +9,41 @@ import {
   SkipPeriodCreate
 } from '../models/types';
 
+// 声明window._env_的类型
+declare global {
+  interface Window {
+    _env_?: {
+      REACT_APP_API_URL?: string;
+    };
+  }
+}
+
+// 从window._env_对象中读取API地址，或使用默认值
+const getApiUrl = () => {
+  if (window._env_ && window._env_.REACT_APP_API_URL) {
+    return window._env_.REACT_APP_API_URL;
+  }
+  // 本地开发环境默认地址
+  return process.env.REACT_APP_API_URL || 'http://localhost:8000';
+};
+
 // 设置API基础URL，支持本地开发和生产环境
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+const API_BASE_URL = getApiUrl();
 
 // 处理API URL格式，确保末尾有/api
 const getBaseUrl = () => {
   let baseUrl = API_BASE_URL;
+  // 如果baseUrl已经包含/api，则不添加
   if (!baseUrl.endsWith('/api')) {
-    baseUrl = baseUrl + '/api';
+    // 如果baseUrl以/结尾，则直接添加api
+    if (baseUrl.endsWith('/')) {
+      baseUrl = baseUrl + 'api';
+    } else {
+      // 否则添加/api
+      baseUrl = baseUrl + '/api';
+    }
   }
+  console.log('使用API基础地址:', baseUrl);
   return baseUrl;
 };
 
