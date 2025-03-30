@@ -48,6 +48,7 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
   const [calendarData, setCalendarData] = useState<CalendarResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [isMobile, setIsMobile] = useState<boolean>(window.innerWidth < 768);
   
   // 跳过时间段对话框状态
   const [skipDialogOpen, setSkipDialogOpen] = useState<boolean>(false);
@@ -66,6 +67,16 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
   // 新增状态变量
   const [existingSkipPeriod, setExistingSkipPeriod] = useState<{id: number, date: string, start_time: string, end_time: string} | null>(null);
   const [dialogMode, setDialogMode] = useState<'create' | 'edit' | 'delete'>('create');
+  
+  // 添加窗口大小监听
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
   
   // 获取日历数据
   const fetchCalendarData = async () => {
@@ -117,6 +128,13 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
   // 处理日期点击
   const handleDayClick = (date: Date) => {
     console.log('点击日期:', date);
+    
+    // 如果没有设置周期，则提示用户先设置周期
+    if (!currentCycle) {
+      setSnackbarMessage('请先在【周期设置】中设置开始时间');
+      setSnackbarOpen(true);
+      return;
+    }
     
     // 确保使用北京时间，避免UTC转换问题
     const localDate = new Date(
@@ -687,17 +705,44 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
               month: '月',
               agenda: '议程'
             }}
+            components={{
+              dateCellWrapper: (props) => {
+                // 自定义日期单元格，添加触摸事件支持
+                const { children, value } = props;
+                return (
+                  <div 
+                    onClick={() => handleDayClick(value)}
+                    onTouchStart={() => handleDayClick(value)}
+                    style={{ height: '100%', width: '100%' }}
+                  >
+                    {children}
+                  </div>
+                );
+              }
+            }}
           />
         </Box>
       </Paper>
       
       {/* 跳过时间段设置对话框 */}
-      <Dialog open={skipDialogOpen} onClose={handleDialogClose}>
-        <DialogTitle>
+      <Dialog 
+        open={skipDialogOpen} 
+        onClose={handleDialogClose}
+        fullScreen={isMobile}
+        PaperProps={{
+          sx: {
+            width: isMobile ? '100%' : 'auto',
+            maxWidth: isMobile ? '100%' : '500px',
+            borderRadius: isMobile ? 0 : '8px',
+            m: isMobile ? 0 : 2
+          }
+        }}
+      >
+        <DialogTitle sx={{ fontSize: isMobile ? '18px' : '16px', py: isMobile ? 2 : 1.5 }}>
           {dialogMode === 'create' ? '设置跳过时间段' : dialogMode === 'edit' ? '编辑跳过时间段' : '删除跳过时间段'}
         </DialogTitle>
-        <DialogContent>
-          <Typography gutterBottom>
+        <DialogContent sx={{ pt: isMobile ? 2 : 1 }}>
+          <Typography gutterBottom sx={{ fontSize: isMobile ? '16px' : '14px' }}>
             日期: {selectedDate?.toLocaleDateString('zh-CN') || ''}
           </Typography>
           
@@ -711,6 +756,7 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
               fullWidth
               margin="normal"
               disabled={saveLoading}
+              sx={{ '& input': { fontSize: isMobile ? '16px' : '14px' } }}
             />
             
             <TextField
@@ -722,6 +768,7 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
               fullWidth
               margin="normal"
               disabled={saveLoading}
+              sx={{ '& input': { fontSize: isMobile ? '16px' : '14px' } }}
             />
           </Box>
           
@@ -731,29 +778,38 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
             </Box>
           )}
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleDialogClose} disabled={saveLoading}>
+        <DialogActions sx={{ px: isMobile ? 3 : 2, pb: isMobile ? 3 : 2 }}>
+          <Button 
+            onClick={handleDialogClose} 
+            disabled={saveLoading}
+            sx={{ fontSize: isMobile ? '16px' : '14px', py: isMobile ? 1 : 0.5 }}
+            onTouchStart={handleDialogClose}
+          >
             取消
           </Button>
           
           {existingSkipPeriod && (
             <Button 
               onClick={handleDeleteSkipPeriod} 
+              onTouchStart={handleDeleteSkipPeriod}
               variant="outlined" 
               color="error"
               disabled={saveLoading}
               startIcon={saveLoading ? <CircularProgress size={16} /> : null}
+              sx={{ fontSize: isMobile ? '16px' : '14px', py: isMobile ? 1 : 0.5 }}
             >
               {saveLoading ? '处理中...' : '删除'}
             </Button>
           )}
           
           <Button 
-            onClick={handleSaveSkipPeriod} 
+            onClick={handleSaveSkipPeriod}
+            onTouchStart={handleSaveSkipPeriod}
             variant="contained" 
             color="primary"
             disabled={saveLoading}
             startIcon={saveLoading ? <CircularProgress size={16} /> : null}
+            sx={{ fontSize: isMobile ? '16px' : '14px', py: isMobile ? 1 : 0.5 }}
           >
             {saveLoading ? '保存中...' : existingSkipPeriod ? '更新' : '保存'}
           </Button>
@@ -764,19 +820,35 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
       <Dialog
         open={cycleCompletedDialogOpen}
         onClose={() => setCycleCompletedDialogOpen(false)}
+        fullScreen={isMobile}
+        PaperProps={{
+          sx: {
+            width: isMobile ? '100%' : 'auto',
+            maxWidth: isMobile ? '100%' : '500px',
+            borderRadius: isMobile ? 0 : '8px'
+          }
+        }}
       >
-        <DialogTitle>周期已完成</DialogTitle>
+        <DialogTitle sx={{ fontSize: isMobile ? '18px' : '16px' }}>周期已完成</DialogTitle>
         <DialogContent>
-          <Typography>
+          <Typography sx={{ fontSize: isMobile ? '16px' : '14px' }}>
             恭喜您！当前26天周期已完成。是否开始新的周期？
           </Typography>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setCycleCompletedDialogOpen(false)}>取消</Button>
+        <DialogActions sx={{ px: isMobile ? 3 : 2, pb: isMobile ? 3 : 2 }}>
           <Button 
-            onClick={handleCycleCompleted} 
+            onClick={() => setCycleCompletedDialogOpen(false)}
+            onTouchStart={() => setCycleCompletedDialogOpen(false)}
+            sx={{ fontSize: isMobile ? '16px' : '14px', py: isMobile ? 1 : 0.5 }}
+          >
+            取消
+          </Button>
+          <Button 
+            onClick={handleCycleCompleted}
+            onTouchStart={handleCycleCompleted} 
             variant="contained" 
             color="primary"
+            sx={{ fontSize: isMobile ? '16px' : '14px', py: isMobile ? 1 : 0.5 }}
           >
             开始新周期
           </Button>
@@ -789,6 +861,13 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
         autoHideDuration={3000}
         onClose={() => setSnackbarOpen(false)}
         message={snackbarMessage}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        sx={{ 
+          '& .MuiSnackbarContent-root': { 
+            fontSize: isMobile ? '16px' : '14px',
+            minWidth: isMobile ? '90%' : 'auto' 
+          } 
+        }}
       />
     </>
   );
