@@ -1,0 +1,72 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+venv/
+.env
+.venv
+app/backend/venv/
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+app/frontend/build/
+app/frontend/node_modules/
+app/frontend/.npm
+app/frontend/.eslintcache
+# 前端特定文件
+.pnp/
+.pnp.js
+/coverage
+
+# 日志文件
+logs/
+*.log
+
+# 数据库文件
+*.db
+*.db-journal
+*.sqlite3
+calendar_app.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# 临时文件
+tmp/
+.tmp/
+temp/
+.temp/
+
+# 操作系统生成的文件
+Thumbs.db
+.DS_Store
+Desktop.ini
+$RECYCLE.BIN/ 

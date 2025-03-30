@@ -1,0 +1,33 @@
+services:
+  # 后端API服务
+  - type: web
+    name: calendar-26-api
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: cd app && uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: LOG_LEVEL
+        value: INFO
+      - key: LOG_DIR
+        value: logs
+      - key: PYTHON_VERSION
+        value: 3.9.0
+    
+  # 前端静态站点
+  - type: web
+    name: calendar-26-frontend
+    env: static
+    buildCommand: cd app/frontend && npm install && npm run build
+    staticPublishPath: ./app/frontend/build
+    envVars:
+      - key: NODE_VERSION
+        value: 16.x
+      - key: REACT_APP_API_URL
+        fromService:
+          name: calendar-26-api
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: CI
+        value: false
+      - key: ESLINT_NO_DEV_ERRORS
+        value: true 
