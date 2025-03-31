@@ -281,43 +281,31 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
       console.log(`发送到后端的日期: ${dateToSave}`);
       console.log(`用户选择的实际日期: ${selectedDate.getFullYear()}-${selectedDate.getMonth()+1}-${selectedDate.getDate()}`);
       
-      // 检查服务器连接
-      try {
-        // 先尝试测试服务器连接
-        await fetch('http://localhost:8000/api/health-check', { 
-          method: 'GET',
-          mode: 'no-cors',
-          cache: 'no-cache'
-        });
-        
-        // 如果成功，继续保存跳过时间段
-        const result = await calendarDataApi.setSkipPeriod(skipPeriodData);
-        console.log('保存跳过时间段 - 成功结果:', result);
-        
-        // 关闭对话框
-        setSkipDialogOpen(false);
-        
-        // 显示成功提示
-        setSnackbarMessage(dialogMode === 'create' ? '跳过时间段设置成功' : '跳过时间段更新成功');
-        setSnackbarOpen(true);
-        
-        // 重新获取当前周期数据（获取更新后的有效天数）
-        if (onCycleUpdated) {
-          onCycleUpdated();
-        }
-        
-        // 重新获取日历数据以反映更改
-        await fetchCalendarData();
-        
-        // 重置状态 - 在成功完成后再重置，而不是立即重置
-        setTimeout(() => {
-          setSelectedDate(null);
-          setExistingSkipPeriod(null);
-        }, 500);
-      } catch (connectionError) {
-        console.error('服务器连接测试失败:', connectionError);
-        throw new Error('无法连接到服务器，请确保后端服务正在运行');
+      // 直接发送保存请求，不进行服务器连接测试
+      const result = await calendarDataApi.setSkipPeriod(skipPeriodData);
+      console.log('保存跳过时间段 - 成功结果:', result);
+      
+      // 关闭对话框
+      setSkipDialogOpen(false);
+      
+      // 显示成功提示
+      setSnackbarMessage(dialogMode === 'create' ? '跳过时间段设置成功' : '跳过时间段更新成功');
+      setSnackbarOpen(true);
+      
+      // 重新获取当前周期数据（获取更新后的有效天数）
+      if (onCycleUpdated) {
+        onCycleUpdated();
       }
+      
+      // 重新获取日历数据以反映更改
+      await fetchCalendarData();
+      
+      // 重置状态 - 在成功完成后再重置，而不是立即重置
+      setTimeout(() => {
+        setSelectedDate(null);
+        setExistingSkipPeriod(null);
+      }, 500);
+      
     } catch (err) {
       console.error('保存跳过时间段失败:', err);
       // 根据错误类型设置不同的错误信息
@@ -361,36 +349,24 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
       const periodId = existingSkipPeriod.id;
       console.log(`尝试删除跳过时间段，ID: ${periodId}`);
       
-      // 检查服务器连接
-      try {
-        // 先尝试测试服务器连接
-        await fetch('http://localhost:8000/api/health-check', { 
-          method: 'GET',
-          mode: 'no-cors',
-          cache: 'no-cache'
-        });
-        
-        // 删除跳过时间段
-        const response = await calendarDataApi.deleteSkipPeriod(periodId);
-        console.log('删除成功，响应:', response);
-        
-        // 关闭对话框
-        setSkipDialogOpen(false);
-        
-        // 显示成功消息
-        setSnackbarMessage(response.message || '跳过时间段已删除');
-        setSnackbarOpen(true);
-        
-        // 刷新日历数据
-        await fetchCalendarData();
-        
-        // 重置状态
-        setSelectedDate(null);
-        setExistingSkipPeriod(null);
-      } catch (connectionError) {
-        console.error('服务器连接测试失败:', connectionError);
-        throw new Error('无法连接到服务器，请确保后端服务正在运行');
-      }
+      // 直接删除跳过时间段，不进行服务器连接测试
+      const response = await calendarDataApi.deleteSkipPeriod(periodId);
+      console.log('删除成功，响应:', response);
+      
+      // 关闭对话框
+      setSkipDialogOpen(false);
+      
+      // 显示成功消息
+      setSnackbarMessage(response.message || '跳过时间段已删除');
+      setSnackbarOpen(true);
+      
+      // 刷新日历数据
+      await fetchCalendarData();
+      
+      // 重置状态
+      setSelectedDate(null);
+      setExistingSkipPeriod(null);
+      
     } catch (error) {
       console.error('删除跳过时间段失败:', error);
       if (axios.isAxiosError(error)) {
