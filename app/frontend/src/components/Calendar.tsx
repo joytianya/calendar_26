@@ -44,6 +44,14 @@ interface CalendarEvent {
   };
 }
 
+// 获取API基础URL
+const getApiUrl = () => {
+  if (window._env_ && window._env_.REACT_APP_API_URL) {
+    return window._env_.REACT_APP_API_URL;
+  }
+  return process.env.REACT_APP_API_URL || 'http://localhost:8000';
+};
+
 const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCompleted, onCycleUpdated }) => {
   const [calendarData, setCalendarData] = useState<CalendarResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -252,7 +260,7 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
       // 检查服务器连接
       try {
         // 先尝试测试服务器连接
-        await fetch('http://localhost:8000/api/health-check', { 
+        await fetch(`${getApiUrl()}/api/health-check`, { 
           method: 'GET',
           mode: 'no-cors',
           cache: 'no-cache'
@@ -332,7 +340,7 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
       // 检查服务器连接
       try {
         // 先尝试测试服务器连接
-        await fetch('http://localhost:8000/api/health-check', { 
+        await fetch(`${getApiUrl()}/api/health-check`, { 
           method: 'GET',
           mode: 'no-cors',
           cache: 'no-cache'
