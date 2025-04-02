@@ -44,6 +44,14 @@ interface CalendarEvent {
   };
 }
 
+// 获取API基础URL
+const getApiUrl = () => {
+  if (window._env_ && window._env_.REACT_APP_API_URL) {
+    return window._env_.REACT_APP_API_URL;
+  }
+  return process.env.REACT_APP_API_URL || 'http://localhost:8000';
+};
+
 const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCompleted, onCycleUpdated }) => {
   const [calendarData, setCalendarData] = useState<CalendarResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);

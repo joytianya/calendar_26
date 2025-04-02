@@ -68,7 +68,7 @@ EOF
 # 启动前端服务
 echo "启动前端服务..."
 cd "$(dirname "$0")/app/frontend"
-npx serve -s build &
+npx serve -s build -l 3000 --no-clipboard &
 echo "前端服务已启动"
 
 echo "全部服务已重启完成"
