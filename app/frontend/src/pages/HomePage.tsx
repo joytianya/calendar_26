@@ -45,27 +45,33 @@ const HomePage: React.FC = () => {
       // 获取设置
       await calendarSettingsApi.getSettings();
       setShowSettingsError(false);
-    } catch (err) {
+      
+      // 获取当前周期
+      try {
+        const cycleData = await cyclesApi.getCurrentCycle();
+        console.log('获取到当前周期数据:', cycleData);
+        setCurrentCycle(cycleData);
+        setError(null);
+      } catch (err: any) {
+        console.error('获取当前周期失败:', err);
+        // 如果是404错误，可能是没有当前周期，这是正常情况
+        if (err.response?.status === 404) {
+          setCurrentCycle(null);
+          setShowSettingsError(true);
+        } else {
+          setError('获取数据失败，请检查网络连接并重试');
+        }
+      }
+    } catch (err: any) {
       console.log('未找到设置，需要创建', err);
       setShowSettingsError(true);
-    }
-    
-    try {
-      // 获取当前周期
-      const cycleData = await cyclesApi.getCurrentCycle();
-      setCurrentCycle(cycleData);
-      setError(null);
-    } catch (err: any) {
-      console.error('获取数据失败:', err);
-      // 如果是404错误，可能是没有当前周期，这是正常情况
-      if (err.response?.status !== 404) {
-        setError('获取数据失败，请检查网络连接并重试');
-      }
+      setCurrentCycle(null);
     }
   };
   
   // 第一次加载时获取数据
   useEffect(() => {
+    console.log('HomePage组件挂载，开始获取数据');
     fetchInitialData();
   }, []);
   

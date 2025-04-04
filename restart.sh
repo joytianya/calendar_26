@@ -43,13 +43,14 @@ fi
 sleep 2
 
 # 激活虚拟环境
-echo "激活虚拟环境..."
+#echo "激活虚拟环境..."
 cd "$(dirname "$0")"
 source venv/bin/activate
 
 # 启动后端服务
 echo "启动后端服务..."
-python run.py &
+mkdir -p "$(dirname "$0")/logs"
+python run.py > "$(dirname "$0")/logs/backend.log" 2>&1 &
 echo "后端服务已启动"
 
 # 等待后端服务启动
@@ -68,7 +69,8 @@ EOF
 # 启动前端服务
 echo "启动前端服务..."
 cd "$(dirname "$0")/app/frontend"
-npx serve -s build -l 3000 --no-clipboard &
+mkdir -p "$(dirname "$0")/logs"
+npx serve -s build -l 3000 --no-clipboard > "$(dirname "$0")/logs/frontend.log" 2>&1 &
 echo "前端服务已启动"
 
 echo "全部服务已重启完成"

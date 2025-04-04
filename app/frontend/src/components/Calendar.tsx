@@ -90,16 +90,44 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
   const fetchCalendarData = async () => {
     try {
       setLoading(true);
-      // 获取当前月份的第一天和最后一天
+      
+      // 获取当前日期
       const now = new Date();
-      const startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-      const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      
+      // 如果有当前周期，使用周期开始日期作为起始日期
+      let startDate, endDate;
+      if (currentCycle && currentCycle.start_date) {
+        const cycleStartDate = new Date(currentCycle.start_date);
+        // 获取从周期开始日期所在月的第一天
+        startDate = new Date(cycleStartDate.getFullYear(), cycleStartDate.getMonth(), 1);
+        
+        // 计算结束日期：从周期开始日期起至少显示26天
+        const minEndDate = new Date(cycleStartDate);
+        minEndDate.setDate(minEndDate.getDate() + 26);
+        
+        // 获取到minEndDate所在月份的最后一天
+        endDate = new Date(minEndDate.getFullYear(), minEndDate.getMonth() + 1, 0);
+        
+        console.log('使用周期日期范围 - 开始:', startDate.toISOString(), '结束:', endDate.toISOString());
+      } else {
+        // 如果没有当前周期，获取当前月份的数据
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        console.log('使用当前月份范围 - 开始:', startDate.toISOString(), '结束:', endDate.toISOString());
+      }
       
       try {
+        console.log('获取日历数据 - 发送请求:', {
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString()
+        });
+        
         const data = await calendarDataApi.getCalendarData(
           startDate.toISOString(),
           endDate.toISOString()
         );
+        
+        console.log('获取日历数据 - 响应数据:', data);
         setCalendarData(data);
         
         // 检查是否已达到26天
@@ -131,7 +159,7 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
   
   useEffect(() => {
     fetchCalendarData();
-  }, []);
+  }, [currentCycle]);
   
   // 处理日期点击
   const handleDayClick = (date: Date) => {
@@ -432,56 +460,42 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
   
   // 添加跳过时间段事件
   if (calendarData?.days) {
-    console.log('所有日历数据：', calendarData.days);
-    
-    const skippedDays = calendarData.days.filter(day => day.is_skipped && day.skip_period);
-    console.log('跳过的日期总数：', skippedDays.length);
+    console.log('准备渲染日历事件 - 所有日历数据：', calendarData.days);
     
     // 添加跳过时间段事件
     calendarData.days
       .filter(day => day.is_skipped && day.skip_period)
       .forEach(day => {
-        // 确保使用正确的日期，避免时区问题
-        const dateStr = day.date.split('T')[0]; // 提取YYYY-MM-DD部分
+        // 提取日期部分（YYYY-MM-DD）
+        const dateStr = day.date.split('T')[0];
         const [year, month, dayOfMonth] = dateStr.split('-').map(Number);
         
-        // 使用构造函数创建日期对象，明确指定年月日，避免时区转换问题
-        // 使用北京时间中午12点
-        const date = new Date(year, month - 1, dayOfMonth, 12, 0, 0);
+        // 创建日期对象，使用本地时间
+        const date = new Date(year, month - 1, dayOfMonth);
+        console.log('处理跳过时间段 - 日期:', {
+          原始日期: day.date,
+          日期字符串: dateStr,
+          转换后日期: date.toISOString()
+        });
         
         const skipPeriod = day.skip_period;
-        
-        console.log('处理跳过时间段 - 原始日期：', day.date);
-        console.log('处理跳过时间段 - 提取日期字符串：', dateStr);
-        console.log('处理跳过时间段 - 转换后日期对象：', date);
-        console.log('处理跳过时间段 - 跳过时间段信息：', skipPeriod);
-        
         if (skipPeriod) {
+          // 解析时间
           const [startHour, startMinute] = skipPeriod.start_time.split(':').map(Number);
           const [endHour, endMinute] = skipPeriod.end_time.split(':').map(Number);
           
-          // 创建开始时间和结束时间对象，使用同一天的日期
-          // 注意：北京时间下的时间
-          const start = new Date(year, month - 1, dayOfMonth);
-          start.setHours(startHour, startMinute, 0);
+          // 创建事件的开始和结束时间
+          const start = new Date(year, month - 1, dayOfMonth, startHour, startMinute);
+          const end = new Date(year, month - 1, dayOfMonth, endHour, endMinute);
           
-          const end = new Date(year, month - 1, dayOfMonth);
-          end.setHours(endHour, endMinute, 0);
-          
-          console.log('跳过时间段 - 开始时间对象(北京时间)：', start);
-          console.log('跳过时间段 - 结束时间对象(北京时间)：', end);
-          
-          // 如果结束时间小于开始时间，说明跨天了
-          if (end < start) {
-            end.setDate(end.getDate() + 1);
-            console.log('跳过时间段 - 跨天调整后结束时间(北京时间)：', end);
-          }
-          
-          const eventId = `skip-${date.toISOString()}`;
-          console.log('添加事件ID：', eventId);
+          console.log('跳过时间段事件:', {
+            日期: dateStr,
+            开始时间: start.toLocaleString(),
+            结束时间: end.toLocaleString()
+          });
           
           events.push({
-            id: eventId,
+            id: `skip-${dateStr}`,
             title: '跳过时段',
             start,
             end,
@@ -493,26 +507,25 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
           });
         }
       });
-    
-    console.log('生成的事件列表：', events);
   }
   
   // 添加周期开始日期事件
   if (currentCycle) {
-    // 确保使用正确的北京时区解析日期
+    // 解析周期开始日期
     const cycleStartStr = currentCycle.start_date.split('T')[0];
     const [year, month, day] = cycleStartStr.split('-').map(Number);
-    const timeStr = new Date(currentCycle.start_date).toTimeString().split(' ')[0];
+    const timeStr = currentCycle.start_date.split('T')[1].split('.')[0];
     const [hour, minute] = timeStr.split(':').map(Number);
     
-    // 创建使用北京时间的日期对象
-    const startDate = new Date(year, month - 1, day, hour, minute, 0);
-    
-    console.log('周期开始日期(原始)：', currentCycle.start_date);
-    console.log('周期开始日期(北京时间)：', startDate);
+    // 创建开始日期事件
+    const startDate = new Date(year, month - 1, day, hour, minute);
+    console.log('周期开始事件:', {
+      原始日期: currentCycle.start_date,
+      解析后日期: startDate.toLocaleString()
+    });
     
     events.push({
-      id: `start-${startDate.toISOString()}`,
+      id: `start-${cycleStartStr}`,
       title: '周期开始',
       start: startDate,
       end: new Date(startDate.getTime() + 60 * 60 * 1000), // 1小时
@@ -524,6 +537,8 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
     });
   }
   
+  console.log('最终生成的事件列表:', events);
+  
   // 自定义事件样式
   const eventStyleGetter = (event: CalendarEvent) => {
     const isSkipped = event.resource?.isSkipped;
@@ -532,12 +547,15 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
     if (isStartDay) {
       return {
         style: {
-          backgroundColor: '#4caf50', // 绿色
-          borderRadius: '4px',
-          opacity: 0.8,
+          backgroundColor: '#43a047', // 更鲜明的绿色
+          borderRadius: '3px',
+          opacity: 1,
           color: 'white',
-          border: '0px',
-          display: 'block'
+          border: '1px solid #2e7d32',
+          display: 'block',
+          fontWeight: 'bold',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+          padding: '2px 4px'
         }
       };
     }
@@ -545,48 +563,56 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
     if (isSkipped) {
       return {
         style: {
-          backgroundColor: '#ff9800', // 橙色
-          borderRadius: '4px',
-          opacity: 0.8,
+          backgroundColor: '#fb8c00', // 更鲜明的橙色
+          borderRadius: '3px',
+          opacity: 1,
           color: 'white',
-          border: '0px',
-          display: 'block'
+          border: '1px solid #ef6c00',
+          display: 'block',
+          fontWeight: 'bold',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+          padding: '2px 4px'
         }
       };
     }
     
     return {
       style: {
-        backgroundColor: '#3174ad',
-        borderRadius: '4px',
-        opacity: 0.8,
+        backgroundColor: '#1976d2',
+        borderRadius: '3px',
+        opacity: 1,
         color: 'white',
-        border: '0px',
-        display: 'block'
+        border: '1px solid #1565c0',
+        display: 'block',
+        fontWeight: 'bold',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+        padding: '2px 4px'
       }
     };
   };
   
   // 自定义日期单元格
   const dayPropGetter = (date: Date) => {
+    // 将日期转换为YYYY-MM-DD格式进行比较
+    const formatDate = (d: Date) => {
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    };
+    
+    const currentDateStr = formatDate(date);
+    
     // 查找对应的日期数据
     const dayData = calendarData?.days.find(day => {
-      const dayDate = new Date(day.date);
-      return dayDate.getDate() === date.getDate() && 
-             dayDate.getMonth() === date.getMonth() && 
-             dayDate.getFullYear() === date.getFullYear();
+      const dayDateStr = day.date.split('T')[0];
+      return dayDateStr === currentDateStr;
     });
     
     // 检查是否是周期开始日
     if (currentCycle) {
-      const startDate = new Date(currentCycle.start_date);
-      if (startDate.getDate() === date.getDate() && 
-          startDate.getMonth() === date.getMonth() && 
-          startDate.getFullYear() === date.getFullYear()) {
+      const cycleStartStr = currentCycle.start_date.split('T')[0];
+      if (cycleStartStr === currentDateStr) {
         return {
-          className: 'start-day',
+          className: 'start-day', // 应用到单元格的类
           style: {
-            backgroundColor: '#e8f5e9', // 淡绿色
             cursor: 'pointer'
           }
         };
@@ -596,9 +622,24 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
     // 跳过的日期只有在已经设置了跳过时间段后才显示背景色
     if (dayData?.is_skipped && dayData.skip_period) {
       return {
-        className: 'skipped-day',
+        className: 'skipped-day', // 应用到单元格的类
         style: {
-          backgroundColor: '#fff3e0', // 淡橙色
+          cursor: 'pointer'
+        }
+      };
+    }
+    
+    // 是否是当天
+    const isToday = (
+      date.getDate() === new Date().getDate() &&
+      date.getMonth() === new Date().getMonth() &&
+      date.getFullYear() === new Date().getFullYear()
+    );
+    
+    if (isToday) {
+      return {
+        className: 'today', // 应用到单元格的类
+        style: {
           cursor: 'pointer'
         }
       };
@@ -639,14 +680,14 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
         elevation={3} 
         sx={{ 
           p: 3, 
-          height: '90vh',  // 增加高度
+          height: 'auto',  // 改为自适应高度
           width: '100%',   // 确保宽度
           mb: 4,           // 增加底部边距
           overflowX: 'auto'  // 允许水平滚动
         }}
       >
         {currentCycle ? (
-          <Box mb={3}>
+          <Box mb={2}>
             <Typography variant="h6">
               当前周期: {currentCycle.cycle_number} 
               (有效天数: {currentCycle.valid_days_count}/26)
@@ -662,14 +703,91 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
             </Typography>
           </Box>
         ) : (
-          <Box mb={3}>
+          <Box mb={2}>
             <Alert severity="info" sx={{ mb: 2 }}>
               未设置开始时间，请先在【周期设置】中设置开始时间
             </Alert>
           </Box>
         )}
         
-        <Box sx={{ height: 'calc(100% - 100px)', width: '100%' }}>
+        <Box 
+          sx={{ 
+            height: {
+              xs: '65vh', // 移动设备上较小的高度
+              sm: '65vh', // 平板上的高度
+              md: '65vh'  // 桌面上的高度
+            }, 
+            width: '100%',
+            '& .rbc-calendar': {
+              border: '1px solid #e0e0e0',
+              borderRadius: '4px',
+            },
+            '& .rbc-month-view': {
+              border: '1px solid #e0e0e0',
+            },
+            '& .rbc-header': {
+              fontWeight: 'bold',
+              padding: '4px 0',
+              borderBottom: '1px solid #e0e0e0',
+            },
+            '& .rbc-day-bg': {
+              border: '1px solid #e0e0e0',
+            },
+            '& .rbc-month-row + .rbc-month-row': {
+              borderTop: '1px solid #e0e0e0',
+            },
+            '& .rbc-date-cell': {
+              padding: '2px 4px',
+              fontSize: '14px',
+              fontWeight: 'normal',
+            },
+            '& .rbc-day-bg + .rbc-day-bg': {
+              borderLeft: '1px solid #e0e0e0', // 添加竖线分隔符
+            },
+            '& .rbc-toolbar': {
+              marginBottom: '8px',
+            },
+            '& .rbc-toolbar button': {
+              padding: '4px 8px',
+              fontSize: '14px',
+            },
+            '& .start-day .rbc-date-cell': {
+              color: '#2e7d32',
+              fontWeight: 'bold',
+            },
+            '& .skipped-day .rbc-date-cell': {
+              color: '#ef6c00',
+              fontWeight: 'bold',
+            },
+            '& .today .rbc-date-cell': {
+              color: '#1565c0',
+              fontWeight: 'bold',
+            },
+            '& .start-day.rbc-day-bg': {
+              backgroundColor: '#e8f5e9 !important', // 浅绿色背景
+              border: '2px solid #4caf50 !important',
+            },
+            '& .skipped-day.rbc-day-bg': {
+              backgroundColor: '#fff3e0 !important', // 浅橙色背景
+              border: '2px solid #ff9800 !important',
+            },
+            '& .today.rbc-day-bg': {
+              backgroundColor: '#e3f2fd !important', // 浅蓝色背景
+              border: '2px solid #2196f3 !important',
+            },
+            '& .rbc-selected-cell': {
+              backgroundColor: 'rgba(66, 165, 245, 0.2) !important',
+            },
+            '& .rbc-event': {
+              borderRadius: '3px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+              padding: '2px 5px',
+            },
+            '& .rbc-off-range': {
+              opacity: 0.5,
+            }
+          }}
+        >
           <BigCalendar
             localizer={localizer}
             events={events}
