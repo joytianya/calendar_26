@@ -1,0 +1,17 @@
+[Unit]
+Description=26天周期日历应用
+After=network.target
+
+[Service]
+Type=forking
+User=root
+WorkingDirectory=/root/calendar_26
+ExecStart=/bin/bash /root/calendar_26/restart.sh
+Restart=always
+RestartSec=10
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=calendar-26
+
+[Install]
+WantedBy=multi-user.target 

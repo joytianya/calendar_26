@@ -11,9 +11,16 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
-  Divider
+  Divider,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  CircularProgress
 } from '@mui/material';
-import { CalendarSettings, CalendarSettingsCreate } from '../models/types';
+import { CalendarSettings, CalendarSettingsCreate, CycleRecord } from '../models/types';
 import { calendarSettingsApi, cyclesApi } from '../services/api';
 
 interface SettingsFormProps {
@@ -36,11 +43,39 @@ const SettingsForm: React.FC<SettingsFormProps> = ({ onSettingsSaved }) => {
   const [cycleError, setCycleError] = useState<string | null>(null);
   const [cycleSuccess, setCycleSuccess] = useState<boolean>(false);
   
+  // 添加周期历史记录的状态
+  const [cycles, setCycles] = useState<CycleRecord[]>([]);
+  const [cyclesLoading, setCyclesLoading] = useState<boolean>(false);
+  const [cyclesError, setCyclesError] = useState<string | null>(null);
+  
+  // 获取所有周期记录
+  const fetchCycles = async () => {
+    try {
+      setCyclesLoading(true);
+      setCyclesError(null);
+      console.log('开始获取所有周期记录...');
+      const data = await cyclesApi.getAllCycles();
+      console.log('成功获取周期记录:', data);
+      
+      // 确保数据是有序的 - 按周期号排序，最新的在前面
+      const sortedData = [...data].sort((a, b) => b.cycle_number - a.cycle_number);
+      console.log('排序后的周期记录:', sortedData);
+      setCycles(sortedData);
+    } catch (err) {
+      console.error('获取周期历史记录失败:', err);
+      setCyclesError('获取周期历史记录失败');
+    } finally {
+      setCyclesLoading(false);
+    }
+  };
+  
   // 检查是否已有设置
   useEffect(() => {
     const checkExistingSettings = async () => {
       try {
+        console.log('正在检查日历设置...');
         const settings = await calendarSettingsApi.getSettings();
+        console.log('成功获取日历设置:', settings);
         setExistingSettings(true);
         setCurrentSettings(settings);
         
@@ -52,8 +87,12 @@ const SettingsForm: React.FC<SettingsFormProps> = ({ onSettingsSaved }) => {
         const hours = settingsDate.getHours().toString().padStart(2, '0');
         const minutes = settingsDate.getMinutes().toString().padStart(2, '0');
         setTime(`${hours}:${minutes}`);
+        
+        // 获取周期记录
+        fetchCycles();
       } catch (err) {
         // 没有找到设置，允许用户创建
+        console.log('未找到日历设置:', err);
         setExistingSettings(false);
         setCurrentSettings(null);
       }
@@ -172,6 +211,9 @@ const SettingsForm: React.FC<SettingsFormProps> = ({ onSettingsSaved }) => {
       setCycleSuccess(true);
       setCycleError(null);
       
+      // 重新获取周期列表
+      fetchCycles();
+      
       // 通知父组件周期已创建
       onSettingsSaved();
       
@@ -188,6 +230,56 @@ const SettingsForm: React.FC<SettingsFormProps> = ({ onSettingsSaved }) => {
       console.error('创建周期失败:', err);
       setCycleError(err.response?.data?.detail || '创建周期失败，请重试');
       setCycleSuccess(false);
+    }
+  };
+  
+  // 格式化日期部分（仅年月日）
+  const formatDatePart = (dateStr: string | null): string => {
+    if (!dateStr) return '进行中';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+  };
+  
+  // 格式化时间部分（仅时分）
+  const formatTimePart = (dateStr: string | null): string => {
+    if (!dateStr) return '--:--';
+    const date = new Date(dateStr);
+    return date.toLocaleTimeString('zh-CN', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+  
+  // 格式化显示小时数为天+小时格式
+  const formatHoursAsDaysAndHours = (hours: number): string => {
+    const days = Math.floor(hours / 24);
+    const remainingHours = Math.floor(hours % 24);
+    
+    if (days > 0) {
+      return `${days}天${remainingHours}小时`;
+    } else {
+      return `${remainingHours}小时`;
+    }
+  };
+  
+  // 计算还需要多少时间到达26天
+  const calculateRemainingTime = (currentHours: number): string => {
+    const targetHours = 26 * 24; // 26天的小时数
+    const remainingHours = Math.max(0, targetHours - currentHours);
+    
+    const days = Math.floor(remainingHours / 24);
+    const hours = Math.floor(remainingHours % 24);
+    
+    if (days > 0) {
+      return `还需${days}天${hours}小时`;
+    } else if (hours > 0) {
+      return `还需${hours}小时`;
+    } else {
+      return "已达成目标";
     }
   };
   
@@ -218,7 +310,9 @@ const SettingsForm: React.FC<SettingsFormProps> = ({ onSettingsSaved }) => {
           {currentSettings && (
             <Box sx={{ mb: 3 }}>
               <Typography variant="body1">
-                当前开始时间: {new Date(currentSettings.start_date).toLocaleString('zh-CN')}
+                当前开始时间: {cycles.length > 0 
+                  ? new Date(cycles[0].start_date).toLocaleString('zh-CN') 
+                  : new Date(currentSettings.start_date).toLocaleString('zh-CN')}
               </Typography>
             </Box>
           )}
@@ -301,58 +395,90 @@ const SettingsForm: React.FC<SettingsFormProps> = ({ onSettingsSaved }) => {
         <>
           <Divider sx={{ my: 4 }} />
           
-          <Typography variant="h6" gutterBottom>
-            创建自定义开始时间的周期
-          </Typography>
-          
-          {cycleError && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {cycleError}
-            </Alert>
-          )}
-          
-          {cycleSuccess && (
-            <Alert severity="success" sx={{ mb: 2 }}>
-              周期已成功创建
-            </Alert>
-          )}
-          
-          <Box component="form" onSubmit={handleCreateCycle}>
-            <Box display="flex" flexDirection={{ xs: 'column', sm: 'row' }} gap={2} mb={2}>
-              <TextField
-                label="周期开始日期"
-                type="date"
-                value={cycleDate}
-                onChange={(e) => setCycleDate(e.target.value)}
-                InputLabelProps={{ shrink: true }}
-                fullWidth
-                required
-              />
-              
-              <TextField
-                label="周期开始时间"
-                type="time"
-                value={cycleTime}
-                onChange={(e) => setCycleTime(e.target.value)}
-                InputLabelProps={{ shrink: true }}
-                fullWidth
-                required
-              />
-            </Box>
-            
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              您可以为每个周期设置不同的开始时间，系统会使用这个时间作为新周期的起点。
+          {/* 显示所有周期的开始和结束时间 */}
+          <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+            <Typography variant="h6">
+              当前周期记录
             </Typography>
-            
             <Button 
-              type="submit" 
-              variant="contained" 
-              color="secondary" 
-              fullWidth
+              variant="outlined" 
+              size="small"
+              onClick={fetchCycles}
+              onTouchStart={fetchCycles}
             >
-              创建新周期
+              刷新数据
             </Button>
           </Box>
+          
+          {cyclesError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {cyclesError}
+            </Alert>
+          )}
+          
+          {cyclesLoading && (
+            <Box display="flex" justifyContent="center" my={3}>
+              <CircularProgress />
+            </Box>
+          )}
+          
+          {!cyclesLoading && cycles.length === 0 && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              暂无周期记录
+            </Alert>
+          )}
+          
+          {!cyclesLoading && cycles.length > 0 && (
+            <Box sx={{ mt: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: 1, bgcolor: '#fafafa' }}>
+              <Box mb={1}>
+                <Typography variant="subtitle1" fontWeight="bold">
+                  周期 #{cycles[0].cycle_number}
+                </Typography>
+              </Box>
+              <Box display="flex" flexDirection="column" gap={1}>
+                <Box display="flex" justifyContent="space-between">
+                  <Typography variant="body2" color="text.secondary">开始日期时间:</Typography>
+                  <Typography variant="body2" fontWeight="medium">
+                    {formatDatePart(cycles[0].start_date)} {formatTimePart(cycles[0].start_date)}
+                  </Typography>
+                </Box>
+                <Box display="flex" justifyContent="space-between">
+                  <Typography variant="body2" color="text.secondary">结束日期时间:</Typography>
+                  <Typography variant="body2" fontWeight="medium">
+                    {cycles[0].end_date ? `${formatDatePart(cycles[0].end_date)} ${formatTimePart(cycles[0].end_date)}` : '进行中'}
+                  </Typography>
+                </Box>
+                <Box display="flex" justifyContent="space-between">
+                  <Typography variant="body2" color="text.secondary">有效天数:</Typography>
+                  <Typography variant="body2" fontWeight="medium">
+                    {cycles[0].valid_days_count}/26 天
+                  </Typography>
+                </Box>
+                <Box display="flex" justifyContent="space-between">
+                  <Typography variant="body2" color="text.secondary">有效小时数:</Typography>
+                  <Typography variant="body2" fontWeight="medium">
+                    {formatHoursAsDaysAndHours(cycles[0].valid_hours_count)}
+                  </Typography>
+                </Box>
+                <Box display="flex" justifyContent="space-between">
+                  <Typography variant="body2" color="text.secondary">距离26天还剩:</Typography>
+                  <Typography variant="body2" fontWeight="medium">
+                    {calculateRemainingTime(cycles[0].valid_hours_count)}
+                  </Typography>
+                </Box>
+                <Box display="flex" justifyContent="space-between">
+                  <Typography variant="body2" color="text.secondary">状态:</Typography>
+                  <Typography 
+                    variant="body2" 
+                    fontWeight="medium" 
+                    color={cycles[0].is_completed ? 'success.main' : 'primary.main'}
+                  >
+                    {cycles[0].is_completed ? '已完成' : '进行中'}
+                  </Typography>
+                </Box>
+              </Box>
+            </Box>
+          )}
         </>
       )}
       

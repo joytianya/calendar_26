@@ -324,7 +324,59 @@ def calculate_valid_days(cycle: models.CycleRecords, skip_periods: List[models.S
         logger.info(f"计算有效天数 - 总小时: {total_hours:.2f}, 跳过小时: {skipped_hours:.2f}, 有效小时: {valid_hours:.2f}, 有效天数: {valid_days}")
         
         # 确保不超过26天
-        return min(valid_days, 26)
+        valid_days = min(valid_days, 26)
+        
+        # 当有效天数达到26天且周期未完成时，自动完成当前周期并开始新周期
+        if valid_days == 26 and not cycle.is_completed:
+            logger.info(f"周期 {cycle.cycle_number} 有效天数已达到26天，自动完成当前周期并开始新周期")
+            try:
+                from sqlalchemy.orm import Session
+                from app.database.database import SessionLocal
+                
+                db = SessionLocal()
+                try:
+                    # 标记当前周期为已完成
+                    cycle.is_completed = True
+                    cycle.end_date = current_date
+                    db.commit()
+                    
+                    # 获取用户设置的起始时间
+                    settings = db.query(models.CalendarSettings).first()
+                    start_date = current_date
+                    
+                    # 如果有设置，使用设置的开始时间
+                    if settings:
+                        # 使用当前日期，但使用设置中的时间部分
+                        now = current_date
+                        start_date = datetime(
+                            now.year,
+                            now.month,
+                            now.day,
+                            settings.start_date.hour,
+                            settings.start_date.minute,
+                            0
+                        )
+                    
+                    # 创建新周期
+                    new_cycle = models.CycleRecords(
+                        cycle_number=cycle.cycle_number + 1,
+                        start_date=start_date,
+                        valid_days_count=0,
+                        valid_hours_count=0.0,
+                        is_completed=False
+                    )
+                    db.add(new_cycle)
+                    db.commit()
+                    logger.info(f"创建了新的周期记录，ID: {new_cycle.id}, 周期号: {new_cycle.cycle_number}, 开始时间: {start_date}")
+                except Exception as e:
+                    logger.error(f"自动完成周期并创建新周期时出错: {e}", exc_info=True)
+                    db.rollback()
+                finally:
+                    db.close()
+            except Exception as e:
+                logger.error(f"自动完成周期时导入SessionLocal出错: {e}", exc_info=True)
+        
+        return valid_days
     except Exception as e:
         logger.error(f"计算有效天数 - 发生异常: {e}", exc_info=True)
         # 出错时返回当前保存的有效天数，避免破坏数据

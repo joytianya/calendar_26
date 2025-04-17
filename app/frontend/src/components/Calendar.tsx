@@ -76,6 +76,9 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
   const [existingSkipPeriod, setExistingSkipPeriod] = useState<{id: number, date: string, start_time: string, end_time: string} | null>(null);
   const [dialogMode, setDialogMode] = useState<'create' | 'edit' | 'delete'>('create');
   
+  // 添加日历视图日期范围状态
+  const [viewDate, setViewDate] = useState<Date>(new Date());
+  
   // 添加窗口大小监听
   useEffect(() => {
     const handleResize = () => {
@@ -121,7 +124,8 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
           startDate: startDate.toISOString(),
           endDate: endDate.toISOString()
         });
-        
+
+        // 移除健康检查逻辑，直接请求数据
         const data = await calendarDataApi.getCalendarData(
           startDate.toISOString(),
           endDate.toISOString()
@@ -148,8 +152,12 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
             valid_hours_count: 0
           });
           setError(null);
+        } else if (axios.isAxiosError(err) && err.code === 'ERR_NETWORK') {
+          // 处理网络错误
+          setError('无法连接到服务器，请检查网络连接或API地址配置');
+          console.error('网络错误详情:', err);
         } else {
-          setError('获取日历数据失败，请检查网络连接并重试');
+          setError(`获取日历数据失败: ${err.message || '未知错误'}`);
         }
       }
     } finally {
@@ -658,6 +666,64 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
     setSkipDialogOpen(false);
   };
   
+  // 格式化显示小时数为天+小时格式
+  const formatHoursAsDaysAndHours = (hours: number): string => {
+    const days = Math.floor(hours / 24);
+    const remainingHours = Math.floor(hours % 24);
+    
+    if (days > 0) {
+      return `${days}天${remainingHours}小时`;
+    } else {
+      return `${remainingHours}小时`;
+    }
+  };
+  
+  // 计算还需要多少时间到达26天
+  const calculateRemainingTime = (currentHours: number): string => {
+    const targetHours = 26 * 24; // 26天的小时数
+    const remainingHours = Math.max(0, targetHours - currentHours);
+    
+    const days = Math.floor(remainingHours / 24);
+    const hours = Math.floor(remainingHours % 24);
+    
+    if (days > 0) {
+      return `还需${days}天${hours}小时`;
+    } else if (hours > 0) {
+      return `还需${hours}小时`;
+    } else {
+      return "已达成目标";
+    }
+  };
+  
+  // 添加导航处理函数
+  const handleNavigate = (newDate: Date) => {
+    console.log('导航到新日期:', newDate);
+    setViewDate(newDate);
+    
+    // 获取新日期的月份范围
+    const startDate = new Date(newDate.getFullYear(), newDate.getMonth(), 1);
+    const endDate = new Date(newDate.getFullYear(), newDate.getMonth() + 1, 0);
+    
+    // 重新获取选定月份的日历数据
+    setLoading(true);
+    calendarDataApi.getCalendarData(
+      startDate.toISOString(),
+      endDate.toISOString()
+    )
+    .then(data => {
+      console.log('获取新月份日历数据成功:', data);
+      setCalendarData(data);
+      setError(null);
+    })
+    .catch(err => {
+      console.error('获取新月份日历数据失败:', err);
+      setError(`获取日历数据失败: ${err.message || '未知错误'}`);
+    })
+    .finally(() => {
+      setLoading(false);
+    });
+  };
+  
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" p={3}>
@@ -674,8 +740,72 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
     );
   }
   
+  // 提取当前周期的跳过时间段
+  const currentSkipPeriods = calendarData?.days
+    .filter(day => day.is_skipped && day.skip_period)
+    .map(day => ({
+      date: day.date,
+      startTime: day.skip_period?.start_time || '',
+      endTime: day.skip_period?.end_time || '',
+      id: day.skip_period_id
+    })) || [];
+  
   return (
     <>
+      <Paper elevation={3} sx={{ p: { xs: 1, sm: 3 }, mb: 3 }}>
+        {/* 当前周期信息显示 */}
+        {currentCycle ? (
+          <Box mb={3}>
+            <Typography variant="h6" component="div">
+              当前周期: #{currentCycle.cycle_number}
+            </Typography>
+            <Box display="flex" flexDirection={{ xs: 'column', sm: 'row' }} gap={1} mt={1}>
+              <Typography variant="body1">
+                开始时间: {new Date(currentCycle.start_date).toLocaleString('zh-CN')}
+              </Typography>
+              <Typography variant="body1" ml={{ xs: 0, sm: 2 }}>
+                有效天数: {currentCycle.valid_days_count}/26 天
+              </Typography>
+              <Typography variant="body1" ml={{ xs: 0, sm: 2 }}>
+                有效小时数: {formatHoursAsDaysAndHours(currentCycle.valid_hours_count)}
+              </Typography>
+              <Typography variant="body1" ml={{ xs: 0, sm: 2 }}>
+                距离26天还剩: {calculateRemainingTime(currentCycle.valid_hours_count)}
+              </Typography>
+            </Box>
+            
+            {/* 当前周期的跳过时间段列表 */}
+            {currentSkipPeriods.length > 0 && (
+              <Box mt={2}>
+                <Typography variant="subtitle1" sx={{ mb: 1 }}>
+                  已设置的跳过时间段:
+                </Typography>
+                <Box display="flex" flexWrap="wrap" gap={1}>
+                  {currentSkipPeriods.map((period, index) => (
+                    <Box 
+                      key={index} 
+                      sx={{ 
+                        p: 1, 
+                        borderRadius: 1, 
+                        bgcolor: '#fff8e1', 
+                        border: '1px solid #ffecb3',
+                        fontSize: '0.875rem'
+                      }}
+                    >
+                      {new Date(period.date).toLocaleDateString('zh-CN')} {period.startTime}-{period.endTime}
+                    </Box>
+                  ))}
+                </Box>
+              </Box>
+            )}
+          </Box>
+        ) : (
+          <Alert severity="info" sx={{ mb: 3 }}>
+            尚未设置周期。请先在设置选项卡中设置开始时间。
+          </Alert>
+        )}
+      </Paper>
+      
       <Paper 
         elevation={3} 
         sx={{ 
@@ -686,30 +816,6 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
           overflowX: 'auto'  // 允许水平滚动
         }}
       >
-        {currentCycle ? (
-          <Box mb={2}>
-            <Typography variant="h6">
-              当前周期: {currentCycle.cycle_number} 
-              (有效天数: {currentCycle.valid_days_count}/26)
-            </Typography>
-            <Typography variant="body2" color="textSecondary">
-              开始日期: {new Date(currentCycle.start_date).toLocaleDateString('zh-CN')} {new Date(currentCycle.start_date).toLocaleTimeString('zh-CN', {hour: '2-digit', minute:'2-digit'})}
-            </Typography>
-            <Typography variant="body2" color="textSecondary">
-              有效时间: {Math.floor(currentCycle.valid_hours_count)}小时{Math.round((currentCycle.valid_hours_count % 1) * 60)}分钟 (约{currentCycle.valid_days_count}天)
-            </Typography>
-            <Typography variant="body2" color="textSecondary" mt={1}>
-              点击日期可以设置该日的跳过时间段
-            </Typography>
-          </Box>
-        ) : (
-          <Box mb={2}>
-            <Alert severity="info" sx={{ mb: 2 }}>
-              未设置开始时间，请先在【周期设置】中设置开始时间
-            </Alert>
-          </Box>
-        )}
-        
         <Box 
           sx={{ 
             height: {
@@ -800,6 +906,8 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
             dayPropGetter={dayPropGetter}
             views={['month']}
             defaultView="month"
+            date={viewDate}
+            onNavigate={handleNavigate}
             messages={{
               today: '今天',
               previous: '上一月',

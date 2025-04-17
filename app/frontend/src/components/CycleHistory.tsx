@@ -324,6 +324,7 @@ const CycleRow: React.FC<{ cycle: CycleRecord }> = ({ cycle }) => {
       <TableCell>{formatDatePart(cycle.start_date)}</TableCell>
       <TableCell>{formatTimePart(cycle.start_date)}</TableCell>
       <TableCell>{cycle.end_date ? formatDatePart(cycle.end_date) : '进行中'}</TableCell>
+      <TableCell>{cycle.end_date ? formatTimePart(cycle.end_date) : '--'}</TableCell>
       <TableCell>{cycle.valid_days_count}/26 天</TableCell>
       <TableCell>
         {cycle.is_completed ? (
@@ -488,6 +489,13 @@ const CycleHistory: React.FC = () => {
                     </Box>
                     
                     <Box display="flex" justifyContent="space-between">
+                      <Typography variant="body2" color="text.secondary">结束时间:</Typography>
+                      <Typography variant="body2">
+                        {cycle.end_date ? new Date(cycle.end_date).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : '--'}
+                      </Typography>
+                    </Box>
+                    
+                    <Box display="flex" justifyContent="space-between">
                       <Typography variant="body2" color="text.secondary">有效天数:</Typography>
                       <Typography variant="body2" fontWeight="bold">
                         {cycle.valid_days_count}/26 天
@@ -514,6 +522,7 @@ const CycleHistory: React.FC = () => {
                   <TableCell>开始日期</TableCell>
                   <TableCell>开始时间</TableCell>
                   <TableCell>结束日期</TableCell>
+                  <TableCell>结束时间</TableCell>
                   <TableCell>有效天数</TableCell>
                   <TableCell>状态</TableCell>
                   <TableCell>详情</TableCell>

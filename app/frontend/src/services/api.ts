@@ -21,10 +21,13 @@ declare global {
 // 从window._env_对象中读取API地址，或使用默认值
 const getApiUrl = () => {
   if (window._env_ && window._env_.REACT_APP_API_URL) {
+    console.log('从环境配置读取API地址:', window._env_.REACT_APP_API_URL);
     return window._env_.REACT_APP_API_URL;
   }
-  // 本地开发环境默认地址
-  return process.env.REACT_APP_API_URL || 'http://localhost:8000';
+  // 硬编码一个备用地址，确保连接正确的服务器
+  const backupUrl = 'http://101.126.143.26:8000';
+  console.log('使用备用API地址:', backupUrl);
+  return backupUrl;
 };
 
 // 设置API基础URL，支持本地开发和生产环境
@@ -148,8 +151,15 @@ export const calendarDataApi = {
 export const cyclesApi = {
   // 获取所有周期记录
   getAllCycles: async (): Promise<CycleRecord[]> => {
-    const response = await api.get<CycleRecord[]>('/cycles');
-    return response.data;
+    console.log('API调用 - 获取所有周期记录');
+    try {
+      const response = await api.get<CycleRecord[]>('/cycles');
+      console.log('API响应 - 所有周期记录:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('API错误 - 获取所有周期记录失败:', error);
+      throw error;
+    }
   },
   
   // 获取当前周期

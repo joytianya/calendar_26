@@ -1,89 +1,177 @@
 #!/bin/bash
 
-# 停止相关进程
-echo "停止现有服务..."
+# 设置颜色输出
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m' # 无颜色
 
-# 查找并终止后端Python进程
-python_pid=$(ps aux | grep 'python run.py' | grep -v grep | awk '{print $2}')
-if [ -n "$python_pid" ]; then
-  echo "终止后端进程 PID: $python_pid"
-  kill -9 $python_pid
-else
-  echo "未找到后端进程"
-fi
+# 获取脚本所在目录作为项目根目录
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "${ROOT_DIR}"
 
-# 查找并终止前端服务进程 
-serve_pid=$(ps aux | grep 'npx serve' | grep -v grep | awk '{print $2}')
-if [ -n "$serve_pid" ]; then
-  echo "终止前端进程 PID: $serve_pid"
-  kill -9 $serve_pid
-else
-  echo "未找到前端进程"
-fi
-
-# 检查并终止占用8000端口的进程
-port_8000_pid=$(lsof -ti:8000)
-if [ -n "$port_8000_pid" ]; then
-  echo "终止占用8000端口的进程 PID: $port_8000_pid"
-  kill -9 $port_8000_pid
-else
-  echo "端口8000未被占用"
-fi
-
-# 检查并终止占用3000端口的进程
-port_3000_pid=$(lsof -ti:3000)
-if [ -n "$port_3000_pid" ]; then
-  echo "终止占用3000端口的进程 PID: $port_3000_pid"
-  kill -9 $port_3000_pid
-else
-  echo "端口3000未被占用"
-fi
-
-# 短暂等待确保进程已停止
-sleep 2
-
-# 检查并创建虚拟环境
-cd "$(dirname "$0")"
-if [ ! -d "venv" ]; then
-  echo "创建虚拟环境..."
-  python3 -m venv venv
-  source venv/bin/activate
-  echo "安装依赖包..."
-  pip install -r requirements.txt
-else
-  echo "激活虚拟环境..."
-  source venv/bin/activate
-fi
-
-# 设置根目录
-ROOT_DIR="$(dirname "$0")"
-
-# 启动后端服务
-echo "启动后端服务..."
+# 创建日志目录
 mkdir -p "${ROOT_DIR}/logs"
-python run.py > "${ROOT_DIR}/logs/backend.log" 2>&1 &
-echo "后端服务已启动"
+BACKEND_LOG="${ROOT_DIR}/logs/backend.log"
+FRONTEND_LOG="${ROOT_DIR}/logs/frontend.log"
 
-# 等待后端服务启动
-sleep 3
+# 定义日志函数
+log_info() {
+  echo -e "${GREEN}[INFO]${NC} $1"
+}
 
-# 更新前端环境配置
-echo "更新前端API地址配置..."
-SERVER_IP=$(curl -s http://ifconfig.me || hostname -I | awk '{print $1}')
-echo "检测到服务器IP: $SERVER_IP"
-cat > "${ROOT_DIR}/app/frontend/build/env-config.js" << EOF
+log_warn() {
+  echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+log_error() {
+  echo -e "${RED}[ERROR]${NC} $1"
+}
+
+# 配置
+BACKEND_PORT=8000
+FRONTEND_PORT=3000
+BACKEND_PROCESS="uvicorn app.main:app"
+FRONTEND_PROCESS="node.*react-scripts start"
+
+# 优雅地停止进程
+stop_process() {
+  local process_pattern=$1
+  local port=$2
+  local name=$3
+  
+  # 通过进程名查找
+  pid=$(ps aux | grep -E "$process_pattern" | grep -v "grep" | awk '{print $2}' | head -1)
+  
+  # 如果通过进程名没找到，尝试通过端口查找
+  if [ -z "$pid" ] && [ -n "$port" ]; then
+    pid=$(lsof -ti:$port 2>/dev/null)
+  fi
+  
+  if [ -n "$pid" ]; then
+    log_info "正在停止${name}服务 (PID: $pid)..."
+    kill -15 $pid 2>/dev/null
+    
+    # 等待进程自然结束
+    for i in {1..5}; do
+      if ! ps -p $pid > /dev/null 2>&1; then
+        break
+      fi
+      sleep 1
+    done
+    
+    # 如果进程仍然存在，强制终止
+    if ps -p $pid > /dev/null 2>&1; then
+      log_warn "${name}服务没有响应，强制终止中..."
+      kill -9 $pid 2>/dev/null
+    fi
+    
+    log_info "${name}服务已停止"
+  else
+    log_info "未检测到运行中的${name}服务"
+  fi
+}
+
+# 启动后端
+start_backend() {
+  log_info "启动后端服务..."
+  
+  # 检查并激活虚拟环境
+  if [ ! -d "venv" ]; then
+    log_info "创建虚拟环境..."
+    python3 -m venv venv
+    source venv/bin/activate
+    log_info "安装后端依赖..."
+    pip install -r requirements.txt
+  else
+    log_info "激活虚拟环境..."
+    source venv/bin/activate
+  fi
+  
+  # 启动后端服务
+  PYTHONUNBUFFERED=1 nohup uvicorn app.main:app --host 0.0.0.0 --port $BACKEND_PORT --reload > "$BACKEND_LOG" 2>&1 &
+  
+  # 保存进程ID
+  echo $! > "${ROOT_DIR}/backend.pid"
+  
+  # 等待后端启动
+  log_info "等待后端服务启动..."
+  for i in {1..10}; do
+    if curl -s "http://localhost:$BACKEND_PORT/api/health-check" > /dev/null 2>&1; then
+      log_info "后端服务已成功启动"
+      break
+    fi
+    if [ $i -eq 10 ]; then
+      log_warn "后端服务可能未正常启动，请检查日志: $BACKEND_LOG"
+    fi
+    sleep 1
+  done
+}
+
+# 启动前端
+start_frontend() {
+  log_info "启动前端服务..."
+  
+  # 进入前端目录
+  cd "${ROOT_DIR}/app/frontend"
+  
+  # 更新环境配置
+  log_info "更新前端环境配置..."
+  SERVER_IP=$(hostname -I | awk '{print $1}' || echo "localhost")
+  
+  # 创建前端环境配置文件
+  mkdir -p public
+  cat > "public/env-config.js" << EOF
 window._env_ = {
-  REACT_APP_API_URL: "http://${SERVER_IP}:8000"
-}; 
+  REACT_APP_API_URL: "http://${SERVER_IP}:${BACKEND_PORT}"
+};
 EOF
+  
+  # 安装依赖（如果需要）
+  if [ ! -d "node_modules" ]; then
+    log_info "安装前端依赖..."
+    npm install
+  fi
+  
+  # 启动前端开发服务器（支持热重载）
+  BROWSER=none nohup npm start > "$FRONTEND_LOG" 2>&1 &
+  
+  # 保存进程ID
+  echo $! > "${ROOT_DIR}/frontend.pid"
+  
+  # 等待前端启动
+  log_info "等待前端服务启动..."
+  for i in {1..15}; do
+    if curl -s "http://localhost:$FRONTEND_PORT" > /dev/null 2>&1; then
+      log_info "前端服务已成功启动"
+      break
+    fi
+    if [ $i -eq 15 ]; then
+      log_warn "前端服务可能未正常启动，请检查日志: $FRONTEND_LOG"
+    fi
+    sleep 1
+  done
+}
 
-# 启动前端服务
-echo "启动前端服务..."
-cd "${ROOT_DIR}/app/frontend"
-mkdir -p "${ROOT_DIR}/logs"
-npx serve -s build -l 3000 --no-clipboard > "${ROOT_DIR}/logs/frontend.log" 2>&1 &
-echo "前端服务已启动"
+# 主要流程
 
-echo "全部服务已重启完成"
-echo "前端访问地址: http://${SERVER_IP}:3000"
-echo "后端API地址: http://${SERVER_IP}:8000" 
+# 1. 停止现有服务
+log_info "检查并停止现有服务..."
+stop_process "$BACKEND_PROCESS" $BACKEND_PORT "后端"
+stop_process "$FRONTEND_PROCESS" $FRONTEND_PORT "前端"
+
+# 2. 启动服务
+start_backend
+start_frontend
+
+# 3. 显示访问信息
+cd "${ROOT_DIR}"
+SERVER_IP=$(hostname -I | awk '{print $1}' || echo "localhost")
+log_info "服务已启动完成!"
+log_info "=========================================="
+log_info "前端访问地址: http://${SERVER_IP}:${FRONTEND_PORT}"
+log_info "后端API地址: http://${SERVER_IP}:${BACKEND_PORT}"
+log_info "=========================================="
+log_info "前端日志: tail -f $FRONTEND_LOG"
+log_info "后端日志: tail -f $BACKEND_LOG"
+log_info "要停止服务，请再次运行 ./restart.sh" 
