@@ -388,6 +388,123 @@ const CycleRow: React.FC<{ cycle: CycleRecord }> = ({ cycle }) => {
   );
 };
 
+// 移动端显示的周期跳过时间段组件
+const MobileCycleSkipPeriods: React.FC<{ cycle: CycleRecord }> = ({ cycle }) => {
+  const [open, setOpen] = useState(false);
+  const [skipPeriods, setSkipPeriods] = useState<SkipPeriod[]>([]);
+  const [loading, setLoading] = useState(false);
+  
+  // 获取该周期的跳过时间段
+  const fetchSkipPeriods = async () => {
+    if (!open && skipPeriods.length === 0 && cycle.id) {
+      try {
+        setLoading(true);
+        const data = await calendarDataApi.getSkipPeriods(cycle.id);
+        setSkipPeriods(data);
+      } catch (err) {
+        console.error('获取跳过时间段失败:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+  
+  // 切换展开/折叠状态
+  const toggleOpen = () => {
+    console.log('切换展开状态，当前:', open, '->新状态:', !open);
+    const newOpenState = !open;
+    setOpen(newOpenState);
+    
+    if (newOpenState) {
+      fetchSkipPeriods();
+    }
+  };
+  
+  // 创建并返回中国标准时间的Date对象
+  const createChinaDate = (dateStr: string | null): Date | null => {
+    if (!dateStr) return null;
+    // 创建标准的Date对象，会自动按照本地时区处理
+    const date = new Date(dateStr);
+    return date;
+  };
+  
+  // 格式化日期部分（仅年月日）
+  const formatDatePart = (dateStr: string | null): string => {
+    if (!dateStr) return '进行中';
+    const date = createChinaDate(dateStr);
+    if (!date) return '无效日期';
+    return date.toLocaleDateString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      timeZone: 'Asia/Shanghai' // 确保使用北京时间
+    });
+  };
+  
+  return (
+    <>
+      <Button
+        variant="outlined"
+        color="primary"
+        fullWidth
+        onClick={toggleOpen}
+        onTouchStart={toggleOpen}
+        startIcon={open ? <VisibilityOffIcon /> : <VisibilityIcon />}
+        sx={{ borderRadius: '20px', py: 1 }}
+      >
+        {open ? '隐藏跳过时间段' : '查看跳过时间段'}
+      </Button>
+      
+      <Collapse in={open} timeout="auto" unmountOnExit>
+        <Box sx={{ mt: 2, mb: 1, p: 1, backgroundColor: '#f5f5f5', borderRadius: '10px' }}>
+          {loading ? (
+            <Box display="flex" justifyContent="center" py={2}>
+              <CircularProgress size={24} />
+            </Box>
+          ) : skipPeriods.length === 0 ? (
+            <Typography variant="body2" align="center" color="text.secondary" py={1}>
+              此周期无跳过时间段记录
+            </Typography>
+          ) : (
+            <Box>
+              <Typography variant="subtitle2" gutterBottom>
+                <AccessTimeIcon sx={{ fontSize: 16, mr: 0.5, verticalAlign: 'middle' }} />
+                跳过时间段记录 ({skipPeriods.length})
+              </Typography>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 1 }}>
+                {skipPeriods.map((period) => (
+                  <Box 
+                    key={period.id} 
+                    sx={{ 
+                      p: 1, 
+                      borderRadius: '8px', 
+                      border: '1px solid #e0e0e0',
+                      backgroundColor: 'white'
+                    }}
+                  >
+                    <Box display="flex" justifyContent="space-between">
+                      <Typography variant="body2" color="text.secondary">日期:</Typography>
+                      <Typography variant="body2">
+                        {formatDatePart(period.date)}
+                      </Typography>
+                    </Box>
+                    <Box display="flex" justifyContent="space-between">
+                      <Typography variant="body2" color="text.secondary">时间段:</Typography>
+                      <Typography variant="body2">
+                        {period.start_time.substring(0, 5)} - {period.end_time.substring(0, 5)}
+                      </Typography>
+                    </Box>
+                  </Box>
+                ))}
+              </Box>
+            </Box>
+          )}
+        </Box>
+      </Collapse>
+    </>
+  );
+};
+
 const CycleHistory: React.FC = () => {
   const [cycles, setCycles] = useState<CycleRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -506,7 +623,8 @@ const CycleHistory: React.FC = () => {
                   <Divider sx={{ my: 1 }} />
                   
                   <Box mt={1}>
-                    <CycleRow cycle={cycle} />
+                    {/* 使用专门的移动端组件，而不是CycleRow */}
+                    <MobileCycleSkipPeriods cycle={cycle} />
                   </Box>
                 </CardContent>
               </Card>

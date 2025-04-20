@@ -33,6 +33,9 @@ BACKEND_PORT=8000
 FRONTEND_PORT=3000
 BACKEND_PROCESS="uvicorn app.main:app"
 FRONTEND_PROCESS="node.*react-scripts start"
+# 使用硬编码的公网IP地址，而不是自动检测
+SERVER_IP="101.126.143.26"
+log_info "使用服务器IP: ${SERVER_IP}"
 
 # 优雅地停止进程
 stop_process() {
@@ -117,7 +120,15 @@ start_frontend() {
   
   # 更新环境配置
   log_info "更新前端环境配置..."
-  SERVER_IP=$(hostname -I | awk '{print $1}' || echo "localhost")
+  
+  # 修改index.html中的硬编码API地址
+  log_info "更新index.html中的API地址..."
+  INDEX_HTML="${ROOT_DIR}/app/frontend/public/index.html"
+  if [ -f "$INDEX_HTML" ]; then
+    # 查找并替换window._env_对象
+    sed -i 's|window\._env_ *= *{[^}]*}|window._env_ = {\n      REACT_APP_API_URL: "http://'"${SERVER_IP}"':'"${BACKEND_PORT}"'"\n    }|g' "$INDEX_HTML"
+    log_info "index.html已更新"
+  fi
   
   # 创建前端环境配置文件
   mkdir -p public
@@ -126,6 +137,7 @@ window._env_ = {
   REACT_APP_API_URL: "http://${SERVER_IP}:${BACKEND_PORT}"
 };
 EOF
+  log_info "env-config.js已更新，使用API地址: http://${SERVER_IP}:${BACKEND_PORT}"
   
   # 安装依赖（如果需要）
   if [ ! -d "node_modules" ]; then
@@ -166,7 +178,6 @@ start_frontend
 
 # 3. 显示访问信息
 cd "${ROOT_DIR}"
-SERVER_IP=$(hostname -I | awk '{print $1}' || echo "localhost")
 log_info "服务已启动完成!"
 log_info "=========================================="
 log_info "前端访问地址: http://${SERVER_IP}:${FRONTEND_PORT}"

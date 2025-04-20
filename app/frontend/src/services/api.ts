@@ -18,16 +18,16 @@ declare global {
   }
 }
 
-// 从window._env_对象中读取API地址，或使用默认值
+// 硬编码服务器IP地址，确保始终使用正确的地址
+const SERVER_IP = "101.126.143.26";
+const SERVER_PORT = 8000;
+const HARDCODED_API_URL = `http://${SERVER_IP}:${SERVER_PORT}`;
+
+// 从window._env_对象中读取API地址，或使用硬编码值
 const getApiUrl = () => {
-  if (window._env_ && window._env_.REACT_APP_API_URL) {
-    console.log('从环境配置读取API地址:', window._env_.REACT_APP_API_URL);
-    return window._env_.REACT_APP_API_URL;
-  }
-  // 硬编码一个备用地址，确保连接正确的服务器
-  const backupUrl = 'http://101.126.143.26:8000';
-  console.log('使用备用API地址:', backupUrl);
-  return backupUrl;
+  // 直接使用硬编码值，忽略环境变量
+  console.log('使用硬编码API地址:', HARDCODED_API_URL);
+  return HARDCODED_API_URL;
 };
 
 // 设置API基础URL，支持本地开发和生产环境
@@ -56,6 +56,8 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  // 增加超时时间
+  timeout: 10000
 });
 
 // 日历设置相关API

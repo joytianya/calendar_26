@@ -33,24 +33,23 @@ const theme = createTheme({
   },
 });
 
+// 硬编码服务器地址
+const SERVER_IP = "101.126.143.26";
+const SERVER_PORT = 8000;
+const HARDCODED_API_URL = `http://${SERVER_IP}:${SERVER_PORT}`;
+
 function App() {
   // 服务器状态检查
   const [serverConnected, setServerConnected] = useState<boolean>(false);
   const [serverCheckComplete, setServerCheckComplete] = useState<boolean>(false);
-  const [apiBaseUrl, setApiBaseUrl] = useState<string>('');
+  const [apiBaseUrl, setApiBaseUrl] = useState<string>(HARDCODED_API_URL);
   const [connectionError, setConnectionError] = useState<string>('');
   const [retryCount, setRetryCount] = useState<number>(0);
 
-  // 从env-config.js中获取API URL
+  // 直接使用硬编码的API URL
   const getApiUrl = () => {
-    if (window._env_ && window._env_.REACT_APP_API_URL) {
-      console.log('从环境配置读取API地址:', window._env_.REACT_APP_API_URL);
-      return window._env_.REACT_APP_API_URL;
-    }
-    // 硬编码备用地址
-    const serverIp = '101.126.143.26';
-    console.log('使用硬编码的服务器IP:', serverIp);
-    return `http://${serverIp}:8000`;
+    console.log('使用硬编码API地址:', HARDCODED_API_URL);
+    return HARDCODED_API_URL;
   };
 
   // 健康检查
@@ -62,27 +61,13 @@ function App() {
         setApiBaseUrl(baseUrl);
         console.log('使用API基础URL:', baseUrl);
 
-        // 先尝试直接连接到API根路径
-        try {
-          console.log('尝试连接API根路径...');
-          const rootResponse = await fetch(`${baseUrl}/api`, {
-            method: 'GET',
-            headers: {'Content-Type': 'application/json'},
-            // 确保我们可以检测到CORS错误
-            mode: 'cors'
-          });
-          console.log('API根路径响应:', rootResponse.status);
-        } catch (rootError) {
-          console.warn('连接API根路径失败，将继续尝试健康检查:', rootError);
-        }
-
         // 发送健康检查请求
         const healthCheckUrl = `${baseUrl}/api/health-check`;
         console.log('发送健康检查请求到:', healthCheckUrl);
         
         // 使用axios带超时设置
         const response = await axios.get(healthCheckUrl, {
-          timeout: 5000, // 5秒超时
+          timeout: 10000, // 10秒超时
           headers: {'Content-Type': 'application/json'}
         });
         
