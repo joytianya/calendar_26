@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 import json
 import logging
 from typing import List, Dict, Any, Optional
+from functools import lru_cache
 
 from app.models import models, schemas
 
@@ -252,13 +253,40 @@ def calculate_valid_days(cycle: models.CycleRecords, skip_periods: List[models.S
     基于从周期开始日期到当前日期之间的天数，减去跳过的天数
     计算规则：从用户设置的小时开始算起，排除跳过的时间，天数向下取整
     """
+    # 转换为可哈希类型，以便于缓存
+    cycle_id = cycle.id if cycle else None
+    cycle_start = cycle.start_date if cycle else None
+    cycle_number = cycle.cycle_number if cycle else None
+    is_completed = cycle.is_completed if cycle else None
+    
+    # 将skip_periods转换为可哈希元组
+    skip_periods_tuple = tuple(
+        (
+            str(period.id),
+            period.date.strftime("%Y-%m-%d"),
+            period.start_time,
+            period.end_time
+        )
+        for period in skip_periods
+    )
+    
+    # 调用实际的计算函数
+    return _calculate_valid_days_impl(
+        cycle_id, cycle_start, cycle_number, is_completed, skip_periods_tuple
+    )
+
+@lru_cache(maxsize=32)
+def _calculate_valid_days_impl(
+    cycle_id: Optional[int],
+    cycle_start: Optional[datetime],
+    cycle_number: Optional[int],
+    is_completed: Optional[bool],
+    skip_periods_tuple: tuple
+) -> int:
+    """实际计算有效天数的函数实现（可缓存）"""
     try:
-        if not cycle:
+        if not cycle_id or not cycle_start:
             return 0
-        
-        # 获取周期开始日期时间
-        cycle_start = cycle.start_date
-        logger.debug(f"计算有效天数 - 周期开始日期时间: {cycle_start}")
         
         # 获取当前日期时间
         current_date = datetime.now()
@@ -277,16 +305,17 @@ def calculate_valid_days(cycle: models.CycleRecords, skip_periods: List[models.S
         skipped_hours = 0
         skipped_dates = set()
         
-        for period in skip_periods:
+        for period_info in skip_periods_tuple:
             try:
-                # 获取跳过日期，确保使用正确的日期部分
-                skip_date = period.date.date()
+                period_id, date_str, start_time, end_time = period_info
+                # 解析日期字符串
+                skip_date = datetime.strptime(date_str, "%Y-%m-%d").date()
                 skipped_dates.add(skip_date)
                 logger.debug(f"处理跳过日期: {skip_date}")
                 
                 # 获取跳过时间段，以北京时间为准
-                start_hour, start_minute = map(int, period.start_time.split(':'))
-                end_hour, end_minute = map(int, period.end_time.split(':'))
+                start_hour, start_minute = map(int, start_time.split(':'))
+                end_hour, end_minute = map(int, end_time.split(':'))
                 
                 # 创建跳过开始和结束时间的datetime对象，使用北京时间
                 # 注意：在组合日期和时间时，确保当日的00:00:00作为基准
@@ -313,9 +342,9 @@ def calculate_valid_days(cycle: models.CycleRecords, skip_periods: List[models.S
                 skip_hours = (adjusted_skip_end - adjusted_skip_start).total_seconds() / 3600
                 skipped_hours += skip_hours
                 
-                logger.debug(f"计算有效天数 - 跳过日期: {skip_date}, 时段: {period.start_time}-{period.end_time}, 跳过小时: {skip_hours:.2f}")
+                logger.debug(f"计算有效天数 - 跳过日期: {skip_date}, 时段: {start_time}-{end_time}, 跳过小时: {skip_hours:.2f}")
             except Exception as e:
-                logger.error(f"计算有效天数 - 处理跳过日期时出错: {e}, period: {period}", exc_info=True)
+                logger.error(f"计算有效天数 - 处理跳过日期时出错: {e}, period_info: {period_info}", exc_info=True)
         
         # 计算有效小时数和有效天数
         valid_hours = total_hours - skipped_hours
@@ -326,58 +355,12 @@ def calculate_valid_days(cycle: models.CycleRecords, skip_periods: List[models.S
         # 确保不超过26天
         valid_days = min(valid_days, 26)
         
-        # 当有效天数达到26天且周期未完成时，自动完成当前周期并开始新周期
-        if valid_days == 26 and not cycle.is_completed:
-            logger.info(f"周期 {cycle.cycle_number} 有效天数已达到26天，自动完成当前周期并开始新周期")
-            try:
-                from sqlalchemy.orm import Session
-                from app.database.database import SessionLocal
-                
-                db = SessionLocal()
-                try:
-                    # 标记当前周期为已完成
-                    cycle.is_completed = True
-                    cycle.end_date = current_date
-                    db.commit()
-                    
-                    # 获取用户设置的起始时间
-                    settings = db.query(models.CalendarSettings).first()
-                    start_date = current_date
-                    
-                    # 如果有设置，使用设置的开始时间
-                    if settings:
-                        # 使用当前日期，但使用设置中的时间部分
-                        now = current_date
-                        start_date = datetime(
-                            now.year,
-                            now.month,
-                            now.day,
-                            settings.start_date.hour,
-                            settings.start_date.minute,
-                            0
-                        )
-                    
-                    # 创建新周期
-                    new_cycle = models.CycleRecords(
-                        cycle_number=cycle.cycle_number + 1,
-                        start_date=start_date,
-                        valid_days_count=0,
-                        valid_hours_count=0.0,
-                        is_completed=False
-                    )
-                    db.add(new_cycle)
-                    db.commit()
-                    logger.info(f"创建了新的周期记录，ID: {new_cycle.id}, 周期号: {new_cycle.cycle_number}, 开始时间: {start_date}")
-                except Exception as e:
-                    logger.error(f"自动完成周期并创建新周期时出错: {e}", exc_info=True)
-                    db.rollback()
-                finally:
-                    db.close()
-            except Exception as e:
-                logger.error(f"自动完成周期时导入SessionLocal出错: {e}", exc_info=True)
+        # 当有效天数达到26天且周期未完成时，记录日志（实际完成在主函数中处理）
+        if valid_days == 26 and not is_completed:
+            logger.info(f"周期 {cycle_number} 有效天数已达到26天，需要完成当前周期并开始新周期")
         
         return valid_days
     except Exception as e:
         logger.error(f"计算有效天数 - 发生异常: {e}", exc_info=True)
-        # 出错时返回当前保存的有效天数，避免破坏数据
-        return cycle.valid_days_count if cycle else 0 
+        # 出错时返回0，避免破坏数据
+        return 0 

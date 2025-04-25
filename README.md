@@ -32,8 +32,46 @@ source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
 # 启动后端服务
-cd app
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+./manage.sh start
+```
+
+### 使用统一管理脚本
+
+本项目提供了一个统一的管理脚本 `manage.sh`，用于简化各种操作：
+
+```bash
+# 显示帮助信息
+./manage.sh help
+
+# 启动所有服务（前端和后端）
+./manage.sh start
+
+# 停止所有服务
+./manage.sh stop
+
+# 重启所有服务
+./manage.sh restart
+
+# 检查服务状态
+./manage.sh status
+
+# 监控服务并自动重启
+./manage.sh monitor
+
+# 安装定时监控任务
+./manage.sh cron
+
+# 构建应用（用于部署）
+./manage.sh build
+
+# 强制终止所有相关进程
+./manage.sh kill
+
+# 清理日志文件
+./manage.sh clean
+
+# 修复高CPU使用率问题
+./manage.sh fix-cpu
 ```
 
 ### 前端设置
