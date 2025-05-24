@@ -45,15 +45,20 @@ class CycleRecordsBase(BaseModel):
     valid_days_count: int = 0
     valid_hours_count: float = 0.0
     is_completed: bool = False
+    remark: Optional[str] = None
 
 class CycleRecordsCreate(BaseModel):
     start_date: datetime
     cycle_number: Optional[int] = None
+    remark: Optional[str] = None
 
 class CycleRecordsUpdate(BaseModel):
+    start_date: Optional[datetime] = None
+    cycle_number: Optional[int] = None
     end_date: Optional[datetime] = None
     valid_days_count: Optional[int] = None
     is_completed: Optional[bool] = None
+    remark: Optional[str] = None
 
 class CycleRecords(CycleRecordsBase):
     id: int

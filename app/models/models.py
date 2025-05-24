@@ -28,6 +28,7 @@ class CycleRecords(Base):
     is_completed = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    remark = Column(String(255), default="", nullable=True)  # 新增备注字段
     
     # 与跳过时间段的关系
     skip_period_records = relationship("SkipPeriod", back_populates="cycle")

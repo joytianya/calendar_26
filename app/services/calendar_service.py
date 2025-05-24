@@ -140,53 +140,7 @@ def calculate_calendar_data(
         logger.debug(f"获取到的跳过时间段: {skip_periods}")
         
         # 自动计算有效天数和有效小时数
-        valid_days = calculate_valid_days(current_cycle, skip_periods)
-        
-        # 计算有效小时数
-        current_date = datetime.now()
-        total_hours = (current_date - current_cycle.start_date).total_seconds() / 3600
-        
-        # 计算跳过的小时数
-        skipped_hours = 0
-        for period in skip_periods:
-            try:
-                # 获取跳过日期
-                skip_date = period.date.date()
-                logger.debug(f"处理跳过日期: {skip_date}, 时间段: {period.start_time}-{period.end_time}")
-                
-                # 获取跳过时间段
-                start_hour, start_minute = map(int, period.start_time.split(':'))
-                end_hour, end_minute = map(int, period.end_time.split(':'))
-                
-                # 计算跳过小时数
-                skip_start = datetime.combine(skip_date, datetime.min.time().replace(hour=start_hour, minute=start_minute))
-                skip_end = datetime.combine(skip_date, datetime.min.time().replace(hour=end_hour, minute=end_minute))
-                
-                # 如果结束时间小于开始时间，说明跨天了
-                if end_hour < start_hour or (end_hour == start_hour and end_minute < start_minute):
-                    skip_end = skip_end + timedelta(days=1)
-                
-                logger.debug(f"跳过时段计算 - 开始: {skip_start}, 结束: {skip_end}")
-                
-                # 检查跳过时间段是否在周期时间范围内
-                if skip_start > current_date or skip_end < current_cycle.start_date:
-                    # 跳过时间段不在周期内，忽略
-                    logger.debug(f"跳过时段不在周期范围内，忽略")
-                    continue
-                    
-                # 调整跳过时间段的开始和结束时间，确保在周期时间范围内
-                adjusted_skip_start = max(skip_start, current_cycle.start_date)
-                adjusted_skip_end = min(skip_end, current_date)
-                
-                # 计算该时间段跳过的小时数
-                skip_hours = (adjusted_skip_end - adjusted_skip_start).total_seconds() / 3600
-                skipped_hours += skip_hours
-                logger.debug(f"调整后的跳过时段 - 开始: {adjusted_skip_start}, 结束: {adjusted_skip_end}, 跳过小时数: {skip_hours:.2f}")
-            except Exception as e:
-                logger.error(f"计算有效小时数时出错: {e}", exc_info=True)
-        
-        # 计算有效小时数
-        valid_hours = total_hours - skipped_hours
+        valid_days, valid_hours = calculate_valid_days_and_hours(current_cycle, skip_periods)
         
         # 更新周期记录
         current_cycle.valid_days_count = valid_days
@@ -246,79 +200,58 @@ def calculate_calendar_data(
         valid_hours_count=valid_hours_count
     )
 
-def calculate_valid_days(cycle: models.CycleRecords, skip_periods: List[models.SkipPeriod]) -> int:
+def calculate_valid_days_and_hours(cycle: models.CycleRecords, skip_periods: List[models.SkipPeriod], end_time: Optional[datetime] = None) -> tuple[int, float]:
     """
-    计算当前周期的有效天数
+    统一计算当前周期的有效天数和有效小时数
     
-    基于从周期开始日期到当前日期之间的天数，减去跳过的天数
-    计算规则：从用户设置的小时开始算起，排除跳过的时间，天数向下取整
+    Args:
+        cycle: 周期记录
+        skip_periods: 跳过时间段列表
+        end_time: 结束时间，如果为None则使用当前时间
+    
+    Returns:
+        tuple: (有效天数, 有效小时数)
     """
-    # 转换为可哈希类型，以便于缓存
-    cycle_id = cycle.id if cycle else None
-    cycle_start = cycle.start_date if cycle else None
-    cycle_number = cycle.cycle_number if cycle else None
-    is_completed = cycle.is_completed if cycle else None
-    
-    # 将skip_periods转换为可哈希元组
-    skip_periods_tuple = tuple(
-        (
-            str(period.id),
-            period.date.strftime("%Y-%m-%d"),
-            period.start_time,
-            period.end_time
-        )
-        for period in skip_periods
-    )
-    
-    # 调用实际的计算函数
-    return _calculate_valid_days_impl(
-        cycle_id, cycle_start, cycle_number, is_completed, skip_periods_tuple
-    )
-
-@lru_cache(maxsize=32)
-def _calculate_valid_days_impl(
-    cycle_id: Optional[int],
-    cycle_start: Optional[datetime],
-    cycle_number: Optional[int],
-    is_completed: Optional[bool],
-    skip_periods_tuple: tuple
-) -> int:
-    """实际计算有效天数的函数实现（可缓存）"""
     try:
-        if not cycle_id or not cycle_start:
-            return 0
+        print(f"[DEBUG] calculate_valid_days_and_hours 开始计算")
+        print(f"[DEBUG] cycle: {cycle}")
+        print(f"[DEBUG] cycle.start_date: {cycle.start_date if cycle else None}")
         
-        # 获取当前日期时间
-        current_date = datetime.now()
-        logger.debug(f"计算有效天数 - 当前日期时间: {current_date}")
+        if not cycle or not cycle.start_date:
+            print(f"[DEBUG] 周期或开始时间为空，返回 (0, 0.0)")
+            return 0, 0.0
+        
+        # 确定结束时间
+        if end_time is None:
+            end_time = datetime.now()
+        
+        print(f"[DEBUG] 开始时间: {cycle.start_date}")
+        print(f"[DEBUG] 结束时间: {end_time}")
         
         # 检查周期是否已经开始
-        if current_date < cycle_start:
-            logger.debug(f"计算有效天数 - 周期尚未开始")
-            return 0
+        if end_time < cycle.start_date:
+            print(f"[DEBUG] 周期尚未开始，返回 (0, 0.0)")
+            return 0, 0.0
             
         # 计算总时间差（小时）
-        total_hours = (current_date - cycle_start).total_seconds() / 3600
-        logger.debug(f"计算有效天数 - 总小时数: {total_hours:.2f}小时")
+        total_hours = (end_time - cycle.start_date).total_seconds() / 3600
+        print(f"[DEBUG] 总小时数: {total_hours:.4f}")
         
         # 计算跳过的小时数
         skipped_hours = 0
-        skipped_dates = set()
+        print(f"[DEBUG] 跳过时间段数量: {len(skip_periods)}")
         
-        for period_info in skip_periods_tuple:
+        for period in skip_periods:
             try:
-                period_id, date_str, start_time, end_time = period_info
-                # 解析日期字符串
-                skip_date = datetime.strptime(date_str, "%Y-%m-%d").date()
-                skipped_dates.add(skip_date)
-                logger.debug(f"处理跳过日期: {skip_date}")
+                # 获取跳过日期
+                skip_date = period.date.date()
+                print(f"[DEBUG] 处理跳过日期: {skip_date}")
                 
-                # 获取跳过时间段，以北京时间为准
-                start_hour, start_minute = map(int, start_time.split(':'))
-                end_hour, end_minute = map(int, end_time.split(':'))
+                # 获取跳过时间段
+                start_hour, start_minute = map(int, period.start_time.split(':'))
+                end_hour, end_minute = map(int, period.end_time.split(':'))
                 
-                # 创建跳过开始和结束时间的datetime对象，使用北京时间
-                # 注意：在组合日期和时间时，确保当日的00:00:00作为基准
+                # 创建跳过开始和结束时间的datetime对象
                 skip_start = datetime.combine(skip_date, datetime.min.time().replace(hour=start_hour, minute=start_minute))
                 skip_end = datetime.combine(skip_date, datetime.min.time().replace(hour=end_hour, minute=end_minute))
                 
@@ -326,41 +259,56 @@ def _calculate_valid_days_impl(
                 if end_hour < start_hour or (end_hour == start_hour and end_minute < start_minute):
                     skip_end = skip_end + timedelta(days=1)
                 
-                logger.debug(f"跳过时段(北京时间) - 开始: {skip_start}, 结束: {skip_end}")
+                print(f"[DEBUG] 跳过时段 - 开始: {skip_start}, 结束: {skip_end}")
                 
                 # 检查跳过时间段是否在周期时间范围内
-                if skip_start > current_date or skip_end < cycle_start:
+                if skip_start > end_time or skip_end < cycle.start_date:
                     # 跳过时间段不在周期内，忽略
-                    logger.debug(f"跳过时段不在周期范围内，忽略")
+                    print(f"[DEBUG] 跳过时段不在周期范围内，忽略")
                     continue
                     
                 # 调整跳过时间段的开始和结束时间，确保在周期时间范围内
-                adjusted_skip_start = max(skip_start, cycle_start)
-                adjusted_skip_end = min(skip_end, current_date)
+                adjusted_skip_start = max(skip_start, cycle.start_date)
+                adjusted_skip_end = min(skip_end, end_time)
                 
                 # 计算该时间段跳过的小时数
                 skip_hours = (adjusted_skip_end - adjusted_skip_start).total_seconds() / 3600
-                skipped_hours += skip_hours
+                if skip_hours > 0:
+                    skipped_hours += skip_hours
                 
-                logger.debug(f"计算有效天数 - 跳过日期: {skip_date}, 时段: {start_time}-{end_time}, 跳过小时: {skip_hours:.2f}")
+                print(f"[DEBUG] 调整后的跳过时段 - 开始: {adjusted_skip_start}, 结束: {adjusted_skip_end}, 跳过小时数: {skip_hours:.4f}")
             except Exception as e:
-                logger.error(f"计算有效天数 - 处理跳过日期时出错: {e}, period_info: {period_info}", exc_info=True)
+                print(f"[DEBUG] 计算跳过小时数时出错: {e}")
         
         # 计算有效小时数和有效天数
-        valid_hours = total_hours - skipped_hours
+        valid_hours = max(0, total_hours - skipped_hours)
         valid_days = int(valid_hours / 24)  # 向下取整
         
-        logger.info(f"计算有效天数 - 总小时: {total_hours:.2f}, 跳过小时: {skipped_hours:.2f}, 有效小时: {valid_hours:.2f}, 有效天数: {valid_days}")
+        print(f"[DEBUG] 计算结果 - 总小时: {total_hours:.4f}, 跳过小时: {skipped_hours:.4f}, 有效小时: {valid_hours:.4f}, 有效天数: {valid_days}")
         
-        # 确保不超过26天
+        # 确保不超过26天和对应的小时数
+        max_hours = 26 * 24  # 26天的最大小时数
+        if valid_hours > max_hours:
+            print(f"[DEBUG] 有效小时数 {valid_hours:.2f} 超过26天限制，调整为 {max_hours}")
+            valid_hours = max_hours
+        
         valid_days = min(valid_days, 26)
         
-        # 当有效天数达到26天且周期未完成时，记录日志（实际完成在主函数中处理）
-        if valid_days == 26 and not is_completed:
-            logger.info(f"周期 {cycle_number} 有效天数已达到26天，需要完成当前周期并开始新周期")
+        # 确保有效小时数与有效天数一致（如果有效天数被限制为26，小时数也应该相应调整）
+        if valid_days == 26 and valid_hours > max_hours:
+            valid_hours = max_hours
+            print(f"[DEBUG] 调整有效小时数为26天对应的最大值: {valid_hours}")
         
-        return valid_days
+        print(f"[DEBUG] 最终结果 - 有效天数: {valid_days}, 有效小时数: {valid_hours:.4f}")
+        
+        # 当有效天数达到26天且周期未完成时，记录日志
+        if valid_days == 26 and not cycle.is_completed:
+            print(f"[DEBUG] 周期 {cycle.cycle_number} 有效天数已达到26天，需要完成当前周期并开始新周期")
+        
+        return valid_days, valid_hours
     except Exception as e:
-        logger.error(f"计算有效天数 - 发生异常: {e}", exc_info=True)
+        print(f"[DEBUG] 计算有效天数和小时数 - 发生异常: {e}")
+        import traceback
+        traceback.print_exc()
         # 出错时返回0，避免破坏数据
-        return 0 
+        return 0, 0.0 

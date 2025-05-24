@@ -189,9 +189,16 @@ export const cyclesApi = {
   },
   
   // 完成周期并开始新周期
-  completeCycle: async (id: number): Promise<CycleRecord> => {
-    const response = await api.post<CycleRecord>(`/cycles/${id}/complete`);
+  completeCycle: async (id: number, params?: { remark: string }): Promise<CycleRecord> => {
+    const response = await api.post<CycleRecord>(`/cycles/${id}/complete`, null, {
+      params: params || {}
+    });
     return response.data;
+  },
+  
+  // 删除周期
+  deleteCycle: async (id: number): Promise<void> => {
+    await api.delete(`/cycles/${id}`);
   },
 };
 

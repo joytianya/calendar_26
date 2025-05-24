@@ -7,7 +7,7 @@ import logging
 from app.database.database import get_db
 from app.models import models, schemas
 from app.services import calendar_service
-from app.services.calendar_service import calculate_valid_days
+from app.services.calendar_service import calculate_valid_days_and_hours
 
 router = APIRouter()
 
@@ -54,12 +54,14 @@ def create_settings(
         current_cycle.start_date = settings.start_date
         logger.info(f"更新周期ID {current_cycle.id} 的开始时间: {before_date} -> {settings.start_date}")
         
-        # 重新计算有效天数
+        # 重新计算有效天数和小时数
         skip_periods = db.query(models.SkipPeriod)\
             .filter(models.SkipPeriod.cycle_id == current_cycle.id)\
             .all()
-        current_cycle.valid_days_count = calculate_valid_days(current_cycle, skip_periods)
-        logger.info(f"更新周期ID {current_cycle.id} 的有效天数为: {current_cycle.valid_days_count}")
+        valid_days, valid_hours = calculate_valid_days_and_hours(current_cycle, skip_periods)
+        current_cycle.valid_days_count = valid_days
+        current_cycle.valid_hours_count = valid_hours
+        logger.info(f"更新周期ID {current_cycle.id} 的有效天数为: {valid_days}, 有效小时数为: {valid_hours:.2f}")
         
         db.commit()
     elif is_new_settings and settings.start_date:
@@ -174,8 +176,11 @@ def increment_valid_day(db: Session = Depends(get_db)):
             detail="未找到进行中的周期"
         )
     
-    # 增加有效天数
-    current_cycle.valid_days_count += 1
+    # 增加有效小时数 (增加24小时，相当于一天)
+    current_cycle.valid_hours_count += 24
+    
+    # 从有效小时数重新计算有效天数
+    current_cycle.valid_days_count = int(current_cycle.valid_hours_count / 24)
     
     # 检查是否达到26天
     if current_cycle.valid_days_count >= 26:
@@ -205,6 +210,7 @@ def increment_valid_day(db: Session = Depends(get_db)):
             cycle_number=current_cycle.cycle_number + 1,
             start_date=start_date,
             valid_days_count=0,
+            valid_hours_count=0,
             is_completed=False
         )
         db.add(new_cycle)
@@ -375,12 +381,11 @@ def set_skip_period(
             .filter(models.SkipPeriod.cycle_id == cycle.id)\
             .all()
         
-        # 更新有效天数
-        valid_days = calculate_valid_days(cycle, skip_periods)
+        # 重新计算有效天数和小时数
+        valid_days, valid_hours = calculate_valid_days_and_hours(cycle, skip_periods)
         cycle.valid_days_count = valid_days
-        db.commit()
-        
-        logger.info(f"更新周期 ID: {cycle.id} 的有效天数为: {valid_days}")
+        cycle.valid_hours_count = valid_hours
+        logger.info(f"更新周期ID {cycle.id} 的有效天数为: {valid_days}, 有效小时数为: {valid_hours:.2f}")
         
         return result
     except HTTPException as e:
@@ -448,14 +453,15 @@ async def delete_skip_period(
         remaining_skip_periods = db.query(models.SkipPeriod).filter(models.SkipPeriod.cycle_id == current_cycle.id).all()
         logger.info(f"剩余跳过周期数量: {len(remaining_skip_periods)}")
         
-        # 更新有效天数
-        valid_days = calculate_valid_days(current_cycle, remaining_skip_periods)
-        logger.info(f"重新计算的有效天数: {valid_days}")
+        # 重新计算有效天数和小时数
+        valid_days, valid_hours = calculate_valid_days_and_hours(current_cycle, remaining_skip_periods)
+        logger.info(f"重新计算的有效天数: {valid_days}, 有效小时数: {valid_hours:.2f}")
         
         # 更新周期记录的有效天数
         current_cycle.valid_days_count = valid_days
+        current_cycle.valid_hours_count = valid_hours
         db.commit()
-        logger.info(f"已更新周期ID {current_cycle.id} 的有效天数为 {valid_days}")
+        logger.info(f"已更新周期ID {current_cycle.id} 的有效天数为 {valid_days}, 有效小时数为 {valid_hours:.2f}")
         
         # 返回删除结果
         return {

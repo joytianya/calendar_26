@@ -40,7 +40,7 @@ FRONTEND_PORT=3000
 BACKEND_PROCESS="uvicorn app.main:app"
 FRONTEND_PROCESS="node.*react-scripts start"
 # 自动检测公网IP地址
-SERVER_IP=$(curl -s ifconfig.me || curl -s icanhazip.com || curl -s ipinfo.io/ip || echo "localhost")
+SERVER_IP=$(timeout 3 curl -s ifconfig.me 2>/dev/null || timeout 3 curl -s icanhazip.com 2>/dev/null || timeout 3 curl -s ipinfo.io/ip 2>/dev/null || hostname -I | awk '{print $1}' || echo "localhost")
 log_info "检测到的服务器IP地址: ${SERVER_IP}"
 
 # 服务状态文件，记录上次检查的结果

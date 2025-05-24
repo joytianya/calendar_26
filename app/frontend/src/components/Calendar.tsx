@@ -79,6 +79,11 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
   // 添加日历视图日期范围状态
   const [viewDate, setViewDate] = useState<Date>(new Date());
   
+  // 添加编辑模式状态
+  const [editMode, setEditMode] = useState(false);
+  const [endDialogOpen, setEndDialogOpen] = useState(false);
+  const [endRemark, setEndRemark] = useState('');
+  
   // 添加窗口大小监听
   useEffect(() => {
     const handleResize = () => {
@@ -171,6 +176,11 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
   
   // 处理日期点击
   const handleDayClick = (date: Date) => {
+    if (!editMode) {
+      setSnackbarMessage('请先开启编辑模式');
+      setSnackbarOpen(true);
+      return;
+    }
     console.log('点击日期:', date);
     
     // 如果没有设置周期，则提示用户先设置周期
@@ -752,6 +762,66 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
   
   return (
     <>
+      {/* 编辑模式和手动结束按钮 */}
+      <Box display="flex" gap={2} mb={2}>
+        <Button
+          variant="contained"
+          color={editMode ? 'success' : 'primary'}
+          onClick={() => setEditMode((v) => !v)}
+        >
+          {editMode ? '关闭编辑模式' : '开启编辑模式'}
+        </Button>
+        <Button
+          variant="outlined"
+          color="error"
+          onClick={() => setEndDialogOpen(true)}
+          disabled={!currentCycle}
+        >
+          手动结束当前周期
+        </Button>
+      </Box>
+      {/* 手动结束周期弹窗 */}
+      <Dialog open={endDialogOpen} onClose={() => setEndDialogOpen(false)}>
+        <DialogTitle>手动结束当前周期</DialogTitle>
+        <DialogContent>
+          <Typography>确定要立即结束当前周期并开启新周期吗？</Typography>
+          <TextField
+            label="结束理由（备注）"
+            value={endRemark}
+            onChange={e => setEndRemark(e.target.value)}
+            required
+            fullWidth
+            multiline
+            minRows={2}
+            sx={{ mt: 2 }}
+            autoFocus
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEndDialogOpen(false)}>取消</Button>
+          <Button
+            onClick={async () => {
+              if (!endRemark.trim()) {
+                setSnackbarMessage('请填写结束理由');
+                setSnackbarOpen(true);
+                return;
+              }
+              if (currentCycle) {
+                await cyclesApi.completeCycle(currentCycle.id, { remark: endRemark });
+                setEndDialogOpen(false);
+                setEndRemark('');
+                if (onCycleCompleted) onCycleCompleted();
+                await fetchCalendarData();
+              }
+            }}
+            color="error"
+            variant="contained"
+          >
+            确认结束
+          </Button>
+        </DialogActions>
+      </Dialog>
+      {/* 主要内容 */}
       <Paper elevation={3} sx={{ p: { xs: 1, sm: 3 }, mb: 3 }}>
         {/* 当前周期信息显示 */}
         {currentCycle ? (
@@ -764,7 +834,7 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
                 开始时间: {new Date(currentCycle.start_date).toLocaleString('zh-CN')}
               </Typography>
               <Typography variant="body1" ml={{ xs: 0, sm: 2 }}>
-                有效天数: {currentCycle.valid_days_count}/26 天
+                有效天数: {Math.floor(currentCycle.valid_hours_count / 24)}/26 天
               </Typography>
               <Typography variant="body1" ml={{ xs: 0, sm: 2 }}>
                 有效小时数: {formatHoursAsDaysAndHours(currentCycle.valid_hours_count)}
@@ -773,7 +843,6 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
                 距离26天还剩: {calculateRemainingTime(currentCycle.valid_hours_count)}
               </Typography>
             </Box>
-            
             {/* 当前周期的跳过时间段列表 */}
             {currentSkipPeriods.length > 0 && (
               <Box mt={2}>
@@ -965,7 +1034,7 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
               InputLabelProps={{ shrink: true }}
               fullWidth
               margin="normal"
-              disabled={saveLoading}
+              disabled={saveLoading || !editMode}
               sx={{ '& input': { fontSize: isMobile ? '16px' : '14px' } }}
             />
             
@@ -977,7 +1046,7 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
               InputLabelProps={{ shrink: true }}
               fullWidth
               margin="normal"
-              disabled={saveLoading}
+              disabled={saveLoading || !editMode}
               sx={{ '& input': { fontSize: isMobile ? '16px' : '14px' } }}
             />
           </Box>
@@ -1004,7 +1073,7 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
               onTouchStart={handleDeleteSkipPeriod}
               variant="outlined" 
               color="error"
-              disabled={saveLoading}
+              disabled={saveLoading || !editMode}
               startIcon={saveLoading ? <CircularProgress size={16} /> : null}
               sx={{ fontSize: isMobile ? '16px' : '14px', py: isMobile ? 1 : 0.5 }}
             >
@@ -1017,7 +1086,7 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
             onTouchStart={handleSaveSkipPeriod}
             variant="contained" 
             color="primary"
-            disabled={saveLoading}
+            disabled={saveLoading || !editMode}
             startIcon={saveLoading ? <CircularProgress size={16} /> : null}
             sx={{ fontSize: isMobile ? '16px' : '14px', py: isMobile ? 1 : 0.5 }}
           >
