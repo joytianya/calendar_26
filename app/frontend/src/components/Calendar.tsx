@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar as BigCalendar, momentLocalizer } from 'react-big-calendar';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
+import './Calendar.css';
 import moment from 'moment';
 import 'moment/locale/zh-cn';
 import { CalendarResponse, CycleRecord, SkipPeriodCreate } from '../models/types';
@@ -41,6 +42,7 @@ interface CalendarEvent {
   resource?: {
     isSkipped: boolean;
     isStartDay: boolean;
+    isEndDay?: boolean;
   };
 }
 
@@ -153,6 +155,7 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
           setCalendarData({
             days: [],
             current_cycle: null,
+            historical_cycles: [],
             valid_days_count: 0,
             valid_hours_count: 0
           });
@@ -450,8 +453,8 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
     if (!currentCycle) return;
     
     try {
-      // 调用API完成当前周期
-      await cyclesApi.completeCycle(currentCycle.id);
+      // 调用API完成当前周期，使用默认的结束理由
+      await cyclesApi.completeCycle(currentCycle.id, { remark: '周期自然完成（达到26天）' });
       
       // 关闭对话框
       setCycleCompletedDialogOpen(false);
@@ -527,30 +530,101 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
       });
   }
   
-  // 添加周期开始日期事件
+  // 添加当前周期开始日期事件
   if (currentCycle) {
     // 解析周期开始日期
     const cycleStartStr = currentCycle.start_date.split('T')[0];
     const [year, month, day] = cycleStartStr.split('-').map(Number);
     const timeStr = currentCycle.start_date.split('T')[1].split('.')[0];
     const [hour, minute] = timeStr.split(':').map(Number);
-    
+
     // 创建开始日期事件
     const startDate = new Date(year, month - 1, day, hour, minute);
-    console.log('周期开始事件:', {
+    console.log('当前周期开始事件:', {
       原始日期: currentCycle.start_date,
       解析后日期: startDate.toLocaleString()
     });
-    
+
     events.push({
-      id: `start-${cycleStartStr}`,
+      id: `current-start-${cycleStartStr}`,
       title: '周期开始',
       start: startDate,
       end: new Date(startDate.getTime() + 60 * 60 * 1000), // 1小时
       allDay: false,
-      resource: { 
+      resource: {
         isSkipped: false,
         isStartDay: true
+      }
+    });
+
+    // 如果当前周期已结束，添加结束事件
+    if (currentCycle.end_date) {
+      const cycleEndStr = currentCycle.end_date.split('T')[0];
+      const [endYear, endMonth, endDay] = cycleEndStr.split('-').map(Number);
+
+      // 为了避免跨天显示，将结束事件固定在当天的23:00-23:30
+      const endDate = new Date(endYear, endMonth - 1, endDay, 23, 0);
+      const endDateEnd = new Date(endYear, endMonth - 1, endDay, 23, 30);
+
+      events.push({
+        id: `current-end-${cycleEndStr}`,
+        title: '周期结束',
+        start: endDate,
+        end: endDateEnd,
+        allDay: false,
+        resource: {
+          isSkipped: false,
+          isStartDay: false,
+          isEndDay: true
+        }
+      });
+    }
+  }
+
+  // 添加历史周期的开始和结束日期事件
+  if (calendarData?.historical_cycles) {
+    calendarData.historical_cycles.forEach((historicalCycle, index) => {
+      // 添加历史周期开始事件
+      const historyStartStr = historicalCycle.start_date.split('T')[0];
+      const [startYear, startMonth, startDay] = historyStartStr.split('-').map(Number);
+      const startTimeStr = historicalCycle.start_date.split('T')[1].split('.')[0];
+      const [startHour, startMinute] = startTimeStr.split(':').map(Number);
+
+      const historyStartDate = new Date(startYear, startMonth - 1, startDay, startHour, startMinute);
+
+      events.push({
+        id: `history-start-${index}-${historyStartStr}`,
+        title: `周期#${historicalCycle.cycle_number}开始`,
+        start: historyStartDate,
+        end: new Date(historyStartDate.getTime() + 60 * 60 * 1000), // 1小时
+        allDay: false,
+        resource: {
+          isSkipped: false,
+          isStartDay: true
+        }
+      });
+
+      // 添加历史周期结束事件
+      if (historicalCycle.end_date) {
+        const historyEndStr = historicalCycle.end_date.split('T')[0];
+        const [endYear, endMonth, endDay] = historyEndStr.split('-').map(Number);
+
+        // 为了避免跨天显示，将结束事件固定在当天的23:00-23:30
+        const historyEndDate = new Date(endYear, endMonth - 1, endDay, 23, 0);
+        const historyEndDateEnd = new Date(endYear, endMonth - 1, endDay, 23, 30);
+
+        events.push({
+          id: `history-end-${index}-${historyEndStr}`,
+          title: `周期#${historicalCycle.cycle_number}结束`,
+          start: historyEndDate,
+          end: historyEndDateEnd,
+          allDay: false,
+          resource: {
+            isSkipped: false,
+            isStartDay: false,
+            isEndDay: true
+          }
+        });
       }
     });
   }
@@ -561,7 +635,8 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
   const eventStyleGetter = (event: CalendarEvent) => {
     const isSkipped = event.resource?.isSkipped;
     const isStartDay = event.resource?.isStartDay;
-    
+    const isEndDay = event.resource?.isEndDay;
+
     if (isStartDay) {
       return {
         style: {
@@ -577,7 +652,23 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
         }
       };
     }
-    
+
+    if (isEndDay) {
+      return {
+        style: {
+          backgroundColor: '#f44336', // 红色表示结束
+          borderRadius: '3px',
+          opacity: 1,
+          color: 'white',
+          border: '1px solid #d32f2f',
+          display: 'block',
+          fontWeight: 'bold',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+          padding: '2px 4px'
+        }
+      };
+    }
+
     if (isSkipped) {
       return {
         style: {
@@ -615,36 +706,59 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
     const formatDate = (d: Date) => {
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     };
-    
+
     const currentDateStr = formatDate(date);
-    
+
     // 查找对应的日期数据
     const dayData = calendarData?.days.find(day => {
       const dayDateStr = day.date.split('T')[0];
       return dayDateStr === currentDateStr;
     });
-    
-    // 检查是否是周期开始日
+
+    // 构建CSS类名数组
+    const classNames = [];
+
+    // 检查是否是当前周期的开始日或结束日
     if (currentCycle) {
       const cycleStartStr = currentCycle.start_date.split('T')[0];
       if (cycleStartStr === currentDateStr) {
-        return {
-          className: 'start-day', // 应用到单元格的类
-          style: {
-            cursor: 'pointer'
+        classNames.push('start-day');
+      }
+
+      // 检查是否是当前周期结束日
+      if (currentCycle.end_date) {
+        const cycleEndStr = currentCycle.end_date.split('T')[0];
+        if (cycleEndStr === currentDateStr) {
+          classNames.push('end-day');
+        }
+      }
+    }
+
+    // 检查是否是历史周期的开始日或结束日
+    if (calendarData?.historical_cycles) {
+      for (const historicalCycle of calendarData.historical_cycles) {
+        const historyStartStr = historicalCycle.start_date.split('T')[0];
+        if (historyStartStr === currentDateStr) {
+          classNames.push('start-day');
+        }
+
+        if (historicalCycle.end_date) {
+          const historyEndStr = historicalCycle.end_date.split('T')[0];
+          if (historyEndStr === currentDateStr) {
+            classNames.push('end-day');
           }
-        };
+        }
       }
     }
     
     // 跳过的日期只有在已经设置了跳过时间段后才显示背景色
     if (dayData?.is_skipped && dayData.skip_period) {
-      return {
-        className: 'skipped-day', // 应用到单元格的类
-        style: {
-          cursor: 'pointer'
+      classNames.push('skipped-day');
         }
-      };
+    
+    // 检查是否是有效日期（在周期内且不是跳过的日期）
+    if (dayData && dayData.is_valid && !dayData.is_skipped) {
+      classNames.push('valid-day');
     }
     
     // 是否是当天
@@ -655,15 +769,12 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
     );
     
     if (isToday) {
-      return {
-        className: 'today', // 应用到单元格的类
-        style: {
-          cursor: 'pointer'
-        }
-      };
+      classNames.push('today');
     }
     
+    // 返回样式配置
     return {
+      className: classNames.join(' '), // 合并所有CSS类
       style: {
         cursor: 'pointer'
       }

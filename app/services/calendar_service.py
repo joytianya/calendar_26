@@ -107,7 +107,7 @@ def get_skip_period(date: datetime, settings: models.CalendarSettings) -> Dict[s
     }
 
 def calculate_calendar_data(
-    db: Session, 
+    db: Session,
     settings: models.CalendarSettings,
     start_date: datetime,
     end_date: datetime,
@@ -117,15 +117,29 @@ def calculate_calendar_data(
     # 确保日期没有时间部分
     start_date = datetime(start_date.year, start_date.month, start_date.day)
     end_date = datetime(end_date.year, end_date.month, end_date.day, 23, 59, 59)
-    
+
     logger.debug(f"计算日历数据 - 开始日期: {start_date}, 结束日期: {end_date}")
-    
+
     # 获取当前周期，如果未提供
     if not current_cycle:
         current_cycle = db.query(models.CycleRecords)\
             .filter(models.CycleRecords.is_completed == False)\
             .order_by(models.CycleRecords.id.desc())\
             .first()
+
+    # 获取指定日期范围内的历史周期
+    historical_cycles = db.query(models.CycleRecords)\
+        .filter(models.CycleRecords.is_completed == True)\
+        .filter(
+            # 周期开始日期在查询范围内，或者周期结束日期在查询范围内，或者查询范围在周期内
+            (models.CycleRecords.start_date >= start_date) & (models.CycleRecords.start_date <= end_date) |
+            (models.CycleRecords.end_date >= start_date) & (models.CycleRecords.end_date <= end_date) |
+            (models.CycleRecords.start_date <= start_date) & (models.CycleRecords.end_date >= end_date)
+        )\
+        .order_by(models.CycleRecords.start_date.desc())\
+        .all()
+
+    logger.debug(f"找到 {len(historical_cycles)} 个历史周期在日期范围内")
     
     # 初始化结果
     days = []
@@ -155,10 +169,27 @@ def calculate_calendar_data(
     while current_date <= end_date:
         # 默认为不跳过
         is_skipped = False
+        is_valid = False
+        
+        # 检查是否在周期时间范围内
+        if current_cycle:
+            cycle_start_date = current_cycle.start_date.date()
+            current_date_only = current_date.date()
+            
+            # 如果周期已完成，检查是否在周期时间范围内
+            if current_cycle.is_completed and current_cycle.end_date:
+                cycle_end_date = current_cycle.end_date.date()
+                is_valid = cycle_start_date <= current_date_only <= cycle_end_date
+            else:
+                # 如果周期未完成，检查是否在开始日期之后且不超过当前日期
+                today = datetime.now().date()
+                is_valid = cycle_start_date <= current_date_only <= today
+        
         calendar_day = schemas.CalendarDay(
             date=current_date,
             is_skipped=is_skipped,
-            is_valid_day=not is_skipped
+            is_valid_day=is_valid,
+            is_valid=is_valid  # 添加is_valid字段
         )
         
         # 检查是否是周期开始日
@@ -179,6 +210,7 @@ def calculate_calendar_data(
                 is_skipped = True
                 calendar_day.is_skipped = True
                 calendar_day.is_valid_day = False
+                calendar_day.is_valid = False  # 跳过的日期不是有效日期
                 calendar_day.skip_period = {
                     "date": skip_period.date.strftime("%Y-%m-%d"),
                     "start_time": skip_period.start_time,
@@ -196,6 +228,7 @@ def calculate_calendar_data(
     return schemas.CalendarResponse(
         days=days,
         current_cycle=current_cycle,
+        historical_cycles=historical_cycles,
         valid_days_count=valid_days_count,
         valid_hours_count=valid_hours_count
     )

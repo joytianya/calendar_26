@@ -66,11 +66,13 @@ export interface CalendarDay {
   };
   skip_period_id?: number;
   is_valid_day: boolean;
+  is_valid: boolean;  // 添加is_valid字段
 }
 
 export interface CalendarResponse {
   days: CalendarDay[];
   current_cycle: CycleRecord | null;
+  historical_cycles: CycleRecord[];  // 添加历史周期信息
   valid_days_count: number;
   valid_hours_count: number;
-} 
+}

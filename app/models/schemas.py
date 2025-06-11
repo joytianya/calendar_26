@@ -76,9 +76,11 @@ class CalendarDay(BaseModel):
     skip_period: Optional[Dict[str, Any]] = None
     skip_period_id: Optional[int] = None
     is_valid_day: bool = True
+    is_valid: bool = False  # 添加is_valid字段用于前端标记
     
 class CalendarResponse(BaseModel):
     days: List[CalendarDay]
     current_cycle: Optional[CycleRecords] = None
+    historical_cycles: List[CycleRecords] = []  # 添加历史周期信息
     valid_days_count: int
-    valid_hours_count: float = 0.0 
+    valid_hours_count: float = 0.0

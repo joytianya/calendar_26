@@ -1,0 +1,163 @@
+/* Calendar组件的自定义样式 */
+
+/* 周期开始日样式 */
+.rbc-day-bg.start-day {
+  background-color: #4caf50 !important;
+  background-image: linear-gradient(45deg, #4caf50 25%, transparent 25%), 
+                    linear-gradient(-45deg, #4caf50 25%, transparent 25%), 
+                    linear-gradient(45deg, transparent 75%, #4caf50 75%), 
+                    linear-gradient(-45deg, transparent 75%, #4caf50 75%);
+  background-size: 10px 10px;
+  background-position: 0 0, 0 5px, 5px -5px, -5px 0px;
+  border: 2px solid #2e7d32 !important;
+  position: relative;
+}
+
+.rbc-day-bg.start-day::before {
+  content: "开始";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  background-color: #2e7d32;
+  color: white;
+  font-size: 10px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-weight: bold;
+  z-index: 1;
+}
+
+/* 跳过日期样式 */
+.rbc-day-bg.skipped-day {
+  background-color: #ff9800 !important;
+  background-image: repeating-linear-gradient(
+    45deg,
+    #ff9800,
+    #ff9800 5px,
+    #ffb74d 5px,
+    #ffb74d 10px
+  );
+  border: 2px solid #f57c00 !important;
+  position: relative;
+}
+
+.rbc-day-bg.skipped-day::before {
+  content: "跳过";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  background-color: #f57c00;
+  color: white;
+  font-size: 10px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-weight: bold;
+  z-index: 1;
+}
+
+/* 今天的样式 */
+.rbc-day-bg.today {
+  background-color: #e3f2fd !important;
+  border: 2px solid #1976d2 !important;
+  position: relative;
+}
+
+.rbc-day-bg.today::before {
+  content: "今天";
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  background-color: #1976d2;
+  color: white;
+  font-size: 10px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-weight: bold;
+  z-index: 1;
+}
+
+/* 周期结束日样式 */
+.rbc-day-bg.end-day {
+  background-color: #f44336 !important;
+  background-image: linear-gradient(45deg, #f44336 25%, transparent 25%), 
+                    linear-gradient(-45deg, #f44336 25%, transparent 25%), 
+                    linear-gradient(45deg, transparent 75%, #f44336 75%), 
+                    linear-gradient(-45deg, transparent 75%, #f44336 75%);
+  background-size: 10px 10px;
+  background-position: 0 0, 0 5px, 5px -5px, -5px 0px;
+  border: 2px solid #d32f2f !important;
+  position: relative;
+}
+
+.rbc-day-bg.end-day::before {
+  content: "结束";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  background-color: #d32f2f;
+  color: white;
+  font-size: 10px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-weight: bold;
+  z-index: 1;
+}
+
+/* 有效日期样式 */
+.rbc-day-bg.valid-day {
+  background-color: #c8e6c9 !important;
+  border: 1px solid #4caf50 !important;
+  position: relative;
+}
+
+.rbc-day-bg.valid-day::after {
+  content: "✓";
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  background-color: #4caf50;
+  color: white;
+  font-size: 12px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  z-index: 1;
+}
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+  .rbc-day-bg.start-day::before,
+  .rbc-day-bg.skipped-day::before,
+  .rbc-day-bg.today::before,
+  .rbc-day-bg.end-day::before {
+    font-size: 8px;
+    padding: 1px 2px;
+  }
+  
+  .rbc-day-bg.valid-day::after {
+    font-size: 10px;
+    width: 14px;
+    height: 14px;
+  }
+}
+
+/* 确保标记在日期内容之上 */
+.rbc-day-bg {
+  position: relative;
+}
+
+/* 日历单元格悬停效果 */
+.rbc-day-bg:hover {
+  opacity: 0.8;
+  transition: opacity 0.2s ease;
+}
+
+/* 确保日期数字在标记之上 */
+.rbc-date-cell {
+  position: relative;
+  z-index: 2;
+} 

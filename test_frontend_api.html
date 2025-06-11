@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>测试前端API调用</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        .cycle {
+            background: #f9f9f9;
+            padding: 10px;
+            margin: 10px 0;
+            border-left: 4px solid #007bff;
+        }
+        .historical {
+            border-left-color: #28a745;
+        }
+        .current {
+            border-left-color: #ffc107;
+        }
+        .date-mark {
+            display: inline-block;
+            padding: 2px 8px;
+            margin: 2px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .start-mark {
+            background: #28a745;
+            color: white;
+        }
+        .end-mark {
+            background: #dc3545;
+            color: white;
+        }
+        .loading {
+            text-align: center;
+            color: #666;
+        }
+        .error {
+            color: #dc3545;
+            background: #f8d7da;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .success {
+            color: #155724;
+            background: #d4edda;
+            padding: 10px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>历史日期标记功能测试</h1>
+        
+        <div class="section">
+            <h3>API调用状态</h3>
+            <div id="status" class="loading">正在加载...</div>
+        </div>
+        
+        <div class="section">
+            <h3>历史周期</h3>
+            <div id="historical-cycles"></div>
+        </div>
+        
+        <div class="section">
+            <h3>当前周期</h3>
+            <div id="current-cycle"></div>
+        </div>
+        
+        <div class="section">
+            <h3>应该有标记的日期</h3>
+            <div id="marked-dates"></div>
+        </div>
+        
+        <div class="section">
+            <h3>前端验证指南</h3>
+            <p>请在React应用中验证以下内容：</p>
+            <ul>
+                <li>历史周期的开始日期是否显示绿色背景和"开始"标记</li>
+                <li>历史周期的结束日期是否显示红色背景和"结束"标记</li>
+                <li>当前周期的开始日期是否显示绿色背景和"开始"标记</li>
+                <li>跳过的日期是否显示橙色背景和"跳过"标记</li>
+                <li>事件列表中是否包含周期开始和结束事件</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        async function testAPI() {
+            try {
+                const response = await fetch('http://localhost:8000/api/calendar/data?start_date=2025-03-01T00:00:00&end_date=2025-06-30T23:59:59');
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                document.getElementById('status').innerHTML = '<div class="success">✅ API调用成功</div>';
+                
+                // 显示历史周期
+                const historicalCycles = data.historical_cycles || [];
+                const historicalHTML = historicalCycles.length > 0 
+                    ? historicalCycles.map(cycle => `
+                        <div class="cycle historical">
+                            <strong>周期 #${cycle.cycle_number}</strong><br>
+                            开始: ${cycle.start_date}<br>
+                            结束: ${cycle.end_date || '进行中'}<br>
+                            状态: ${cycle.is_completed ? '已完成' : '进行中'}<br>
+                            有效天数: ${cycle.valid_days_count}/26<br>
+                            备注: ${cycle.remark || '无'}
+                        </div>
+                    `).join('')
+                    : '<p>没有历史周期</p>';
+                
+                document.getElementById('historical-cycles').innerHTML = historicalHTML;
+                
+                // 显示当前周期
+                const currentCycle = data.current_cycle;
+                const currentHTML = currentCycle 
+                    ? `
+                        <div class="cycle current">
+                            <strong>周期 #${currentCycle.cycle_number}</strong><br>
+                            开始: ${currentCycle.start_date}<br>
+                            结束: ${currentCycle.end_date || '进行中'}<br>
+                            状态: ${currentCycle.is_completed ? '已完成' : '进行中'}<br>
+                            有效天数: ${currentCycle.valid_days_count}/26<br>
+                            备注: ${currentCycle.remark || '无'}
+                        </div>
+                    `
+                    : '<p>没有当前周期</p>';
+                
+                document.getElementById('current-cycle').innerHTML = currentHTML;
+                
+                // 生成应该有标记的日期列表
+                const markedDates = [];
+                
+                // 历史周期的开始和结束日期
+                historicalCycles.forEach(cycle => {
+                    if (cycle.start_date) {
+                        const startDate = cycle.start_date.split('T')[0];
+                        markedDates.push({
+                            date: startDate,
+                            type: 'start',
+                            cycle: cycle.cycle_number
+                        });
+                    }
+                    
+                    if (cycle.end_date) {
+                        const endDate = cycle.end_date.split('T')[0];
+                        markedDates.push({
+                            date: endDate,
+                            type: 'end',
+                            cycle: cycle.cycle_number
+                        });
+                    }
+                });
+                
+                // 当前周期的开始日期
+                if (currentCycle && currentCycle.start_date) {
+                    const startDate = currentCycle.start_date.split('T')[0];
+                    markedDates.push({
+                        date: startDate,
+                        type: 'start',
+                        cycle: currentCycle.cycle_number
+                    });
+                }
+                
+                // 按日期排序
+                markedDates.sort((a, b) => a.date.localeCompare(b.date));
+                
+                const markedHTML = markedDates.length > 0
+                    ? markedDates.map(mark => `
+                        <span class="date-mark ${mark.type}-mark">
+                            ${mark.date} - 周期#${mark.cycle} ${mark.type === 'start' ? '开始' : '结束'}
+                        </span>
+                    `).join('')
+                    : '<p>没有应该标记的日期</p>';
+                
+                document.getElementById('marked-dates').innerHTML = markedHTML;
+                
+            } catch (error) {
+                console.error('API调用失败:', error);
+                document.getElementById('status').innerHTML = `<div class="error">❌ API调用失败: ${error.message}</div>`;
+            }
+        }
+        
+        // 页面加载时执行测试
+        testAPI();
+    </script>
+</body>
+</html>
