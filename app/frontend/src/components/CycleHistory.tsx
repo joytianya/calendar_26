@@ -112,7 +112,7 @@ const formatHours = (hours: number | undefined): string => {
 };
 
 // 周期记录行组件
-const CycleRow: React.FC<{ cycle: CycleRecord, onRemarkUpdated: () => void, onDeleted: () => void }> = ({ cycle, onRemarkUpdated, onDeleted }) => {
+const CycleRow: React.FC<{ cycle: CycleRecord, onRemarkUpdated: () => void, onDeleted: () => void, onCycleUpdated: (updatedCycle: CycleRecord) => void }> = ({ cycle, onRemarkUpdated, onDeleted, onCycleUpdated }) => {
   const [open, setOpen] = useState(false);
   const [skipPeriods, setSkipPeriods] = useState<SkipPeriod[]>([]);
   const [loading, setLoading] = useState(false);
@@ -305,8 +305,9 @@ const CycleRow: React.FC<{ cycle: CycleRecord, onRemarkUpdated: () => void, onDe
       }
       
       console.log('提交编辑数据:', updateData);
-      await cyclesApi.updateCycle(cycle.id, updateData);
+      const updatedCycle = await cyclesApi.updateCycle(cycle.id, updateData);
       setEditOpen(false);
+      onCycleUpdated(updatedCycle);
       onRemarkUpdated();
     } catch (err) {
       console.error('编辑保存失败:', err);
@@ -601,8 +602,9 @@ const CycleRow: React.FC<{ cycle: CycleRecord, onRemarkUpdated: () => void, onDe
 // 移动端编辑组件
 const MobileCycleEdit: React.FC<{ 
   cycle: CycleRecord, 
-  onUpdated: () => void 
-}> = ({ cycle, onUpdated }) => {
+  onUpdated: () => void,
+  onCycleUpdated: (updatedCycle: CycleRecord) => void
+}> = ({ cycle, onUpdated, onCycleUpdated }) => {
   const [editRemarkOpen, setEditRemarkOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -648,8 +650,9 @@ const MobileCycleEdit: React.FC<{
         updateData.end_date = editForm.end_date;
       }
       
-      await cyclesApi.updateCycle(cycle.id, updateData);
+      const updatedCycle = await cyclesApi.updateCycle(cycle.id, updateData);
       setEditOpen(false);
+      onCycleUpdated(updatedCycle);
       onUpdated();
     } catch (err) {
       alert('编辑保存失败');
@@ -973,6 +976,15 @@ const CycleHistory: React.FC = () => {
   
   const handleRemarkUpdated = () => setRefreshFlag(f => !f);
   
+  // 实时更新单个周期记录
+  const handleCycleUpdated = (updatedCycle: CycleRecord) => {
+    setCycles(prevCycles => 
+      prevCycles.map(cycle => 
+        cycle.id === updatedCycle.id ? updatedCycle : cycle
+      )
+    );
+  };
+  
   useEffect(() => {
     fetchCycles();
   }, [refreshFlag]);
@@ -1078,7 +1090,7 @@ const CycleHistory: React.FC = () => {
                   <Box mt={1}>
                     {/* 使用专门的移动端组件，而不是CycleRow */}
                     <MobileCycleSkipPeriods cycle={cycle} />
-                    <MobileCycleEdit cycle={cycle} onUpdated={handleRemarkUpdated} />
+                    <MobileCycleEdit cycle={cycle} onUpdated={handleRemarkUpdated} onCycleUpdated={handleCycleUpdated} />
                   </Box>
                 </CardContent>
               </Card>
@@ -1105,7 +1117,7 @@ const CycleHistory: React.FC = () => {
               </TableHead>
               <TableBody>
                 {cycles.map((cycle) => (
-                  <CycleRow key={cycle.id} cycle={cycle} onRemarkUpdated={handleRemarkUpdated} onDeleted={handleRefresh} />
+                  <CycleRow key={cycle.id} cycle={cycle} onRemarkUpdated={handleRemarkUpdated} onDeleted={handleRefresh} onCycleUpdated={handleCycleUpdated} />
                 ))}
               </TableBody>
             </Table>

@@ -98,19 +98,19 @@ def update_cycle(
                 continue
         setattr(db_cycle, key, value)
     
-    # 如果修改了开始或结束日期，重新计算有效天数和有效小时数
-    if date_changed:
-        # 获取跳过时间段
-        skip_periods = db.query(models.SkipPeriod)\
-            .filter(models.SkipPeriod.cycle_id == cycle_id)\
-            .all()
-        
-        # 重新计算有效天数
-        valid_days, valid_hours = calculate_valid_days_and_hours(db_cycle, skip_periods)
-        db_cycle.valid_days_count = valid_days
-        db_cycle.valid_hours_count = valid_hours
-        
-        print(f"重新计算结果 - 总小时: {valid_hours:.2f}, 有效天数: {valid_days}")
+    # 每次更新周期时都重新计算有效天数和有效小时数，以确保数据准确
+    # 获取跳过时间段
+    skip_periods = db.query(models.SkipPeriod)\
+        .filter(models.SkipPeriod.cycle_id == cycle_id)\
+        .all()
+    
+    # 重新计算有效天数，如果用户提供了结束日期，使用结束日期而不是当前时间
+    end_time = db_cycle.end_date if db_cycle.end_date else None
+    valid_days, valid_hours = calculate_valid_days_and_hours(db_cycle, skip_periods, end_time)
+    db_cycle.valid_days_count = valid_days
+    db_cycle.valid_hours_count = valid_hours
+    
+    print(f"重新计算结果 - 总小时: {valid_hours:.2f}, 有效天数: {valid_days}")
     
     db.commit()
     db.refresh(db_cycle)

@@ -219,7 +219,7 @@ def increment_valid_day(db: Session = Depends(get_db)):
     
     return {"message": "有效天数已更新", "valid_days_count": current_cycle.valid_days_count}
 
-@router.post("/skip-period", response_model=schemas.SkipPeriod)
+@router.post("/skip-period-validated", response_model=schemas.SkipPeriod)
 def set_skip_period(
     skip_period_data: schemas.SkipPeriodCreate,
     db: Session = Depends(get_db)
@@ -335,6 +335,33 @@ def set_skip_period(
                 )
         
         logger.info(f"处理日期 - 输入: {input_date}, 处理后: {date_only}")
+        
+        # 验证跳过日期是否在周期开始时间之后
+        skip_date = date_only.date()
+        cycle_start_date = cycle.start_date.date()
+        
+        logger.info(f"[VALIDATION] 验证跳过日期: {skip_date}, 周期开始日期: {cycle_start_date}")
+        
+        if skip_date < cycle_start_date:
+            error_msg = f"跳过日期 {skip_date} 不能在周期开始时间 {cycle_start_date} 之前"
+            logger.warning(error_msg)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_msg
+            )
+        
+        # 如果周期已完成，验证跳过日期是否在周期结束时间之前
+        if cycle.is_completed and cycle.end_date:
+            cycle_end_date = cycle.end_date.date()
+            if skip_date > cycle_end_date:
+                error_msg = f"跳过日期 {skip_date} 不能在周期结束时间 {cycle_end_date} 之后"
+                logger.warning(error_msg)
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=error_msg
+                )
+        
+        logger.info(f"跳过日期验证通过: {skip_date} 在周期范围内")
         
         # 检查是否已存在该日期的跳过时间段
         existing_skip_periods = db.query(models.SkipPeriod)\

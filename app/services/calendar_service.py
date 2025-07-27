@@ -240,7 +240,7 @@ def calculate_valid_days_and_hours(cycle: models.CycleRecords, skip_periods: Lis
     Args:
         cycle: 周期记录
         skip_periods: 跳过时间段列表
-        end_time: 结束时间，如果为None则使用当前时间
+        end_time: 结束时间，如果为None则使用当前时间或周期结束时间
     
     Returns:
         tuple: (有效天数, 有效小时数)
@@ -249,14 +249,23 @@ def calculate_valid_days_and_hours(cycle: models.CycleRecords, skip_periods: Lis
         print(f"[DEBUG] calculate_valid_days_and_hours 开始计算")
         print(f"[DEBUG] cycle: {cycle}")
         print(f"[DEBUG] cycle.start_date: {cycle.start_date if cycle else None}")
+        print(f"[DEBUG] cycle.end_date: {cycle.end_date if cycle else None}")
+        print(f"[DEBUG] 传入的end_time: {end_time}")
         
         if not cycle or not cycle.start_date:
             print(f"[DEBUG] 周期或开始时间为空，返回 (0, 0.0)")
             return 0, 0.0
         
-        # 确定结束时间
+        # 确定结束时间的优先级：传入的end_time > 周期的end_date > 当前时间
         if end_time is None:
-            end_time = datetime.now()
+            if cycle.end_date:
+                end_time = cycle.end_date
+                print(f"[DEBUG] 使用周期结束时间: {end_time}")
+            else:
+                end_time = datetime.now()
+                print(f"[DEBUG] 使用当前时间: {end_time}")
+        else:
+            print(f"[DEBUG] 使用传入的结束时间: {end_time}")
         
         print(f"[DEBUG] 开始时间: {cycle.start_date}")
         print(f"[DEBUG] 结束时间: {end_time}")
@@ -279,6 +288,19 @@ def calculate_valid_days_and_hours(cycle: models.CycleRecords, skip_periods: Lis
                 # 获取跳过日期
                 skip_date = period.date.date()
                 print(f"[DEBUG] 处理跳过日期: {skip_date}")
+                
+                # 验证跳过日期是否在周期开始时间之后（防御性检查）
+                cycle_start_date = cycle.start_date.date()
+                if skip_date < cycle_start_date:
+                    print(f"[DEBUG] 跳过日期 {skip_date} 在周期开始日期 {cycle_start_date} 之前，忽略此跳过时间段")
+                    continue
+                
+                # 如果周期已完成，验证跳过日期是否在周期结束时间之前
+                if hasattr(cycle, 'is_completed') and cycle.is_completed and hasattr(cycle, 'end_date') and cycle.end_date:
+                    cycle_end_date = cycle.end_date.date()
+                    if skip_date > cycle_end_date:
+                        print(f"[DEBUG] 跳过日期 {skip_date} 在周期结束日期 {cycle_end_date} 之后，忽略此跳过时间段")
+                        continue
                 
                 # 获取跳过时间段
                 start_hour, start_minute = map(int, period.start_time.split(':'))
@@ -315,7 +337,8 @@ def calculate_valid_days_and_hours(cycle: models.CycleRecords, skip_periods: Lis
         
         # 计算有效小时数和有效天数
         valid_hours = max(0, total_hours - skipped_hours)
-        valid_days = int(valid_hours / 24)  # 向下取整
+        import math
+        valid_days = math.ceil(valid_hours / 24) if valid_hours > 0 else 0  # 向上取整
         
         print(f"[DEBUG] 计算结果 - 总小时: {total_hours:.4f}, 跳过小时: {skipped_hours:.4f}, 有效小时: {valid_hours:.4f}, 有效天数: {valid_days}")
         
@@ -335,7 +358,7 @@ def calculate_valid_days_and_hours(cycle: models.CycleRecords, skip_periods: Lis
         print(f"[DEBUG] 最终结果 - 有效天数: {valid_days}, 有效小时数: {valid_hours:.4f}")
         
         # 当有效天数达到26天且周期未完成时，记录日志
-        if valid_days == 26 and not cycle.is_completed:
+        if valid_days == 26 and hasattr(cycle, 'is_completed') and not cycle.is_completed:
             print(f"[DEBUG] 周期 {cycle.cycle_number} 有效天数已达到26天，需要完成当前周期并开始新周期")
         
         return valid_days, valid_hours

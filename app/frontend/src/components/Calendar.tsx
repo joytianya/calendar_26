@@ -334,6 +334,32 @@ const Calendar: React.FC<CalendarProps> = ({ onDayClick, currentCycle, onCycleCo
       
       console.log('保存跳过时间段 - 完整发送数据:', skipPeriodData);
       
+      // 客户端验证：检查跳过日期是否在周期开始时间之后
+      const skipDate = new Date(dateToSave);
+      const cycleStartDate = new Date(currentCycle.start_date);
+      
+      if (skipDate < cycleStartDate) {
+        const errorMsg = `跳过日期 ${dateToSave} 不能在周期开始时间 ${cycleStartDate.toLocaleDateString('zh-CN')} 之前`;
+        console.error('客户端验证失败:', errorMsg);
+        setSnackbarMessage(errorMsg);
+        setSnackbarOpen(true);
+        return;
+      }
+      
+      // 如果周期已完成，检查跳过日期是否在周期结束时间之前
+      if (currentCycle.is_completed && currentCycle.end_date) {
+        const cycleEndDate = new Date(currentCycle.end_date);
+        if (skipDate > cycleEndDate) {
+          const errorMsg = `跳过日期 ${dateToSave} 不能在周期结束时间 ${cycleEndDate.toLocaleDateString('zh-CN')} 之后`;
+          console.error('客户端验证失败:', errorMsg);
+          setSnackbarMessage(errorMsg);
+          setSnackbarOpen(true);
+          return;
+        }
+      }
+      
+      console.log('客户端验证通过，准备发送请求');
+      
       // 发送请求前再次检查时区问题
       console.log(`发送到后端的日期: ${dateToSave}`);
       console.log(`用户选择的实际日期: ${selectedDate.getFullYear()}-${selectedDate.getMonth()+1}-${selectedDate.getDate()}`);
